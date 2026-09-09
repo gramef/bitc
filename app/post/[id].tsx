@@ -34,6 +34,7 @@ export default function PostView() {
   const [deleteMenuOpen, setDeleteMenuOpen] = useState(false);
   const [post, setPost] = useState<{
     id: string;
+    userId: string;
     name: string;
     role: string;
     time: string;
@@ -52,6 +53,7 @@ export default function PostView() {
       if (detail) {
         setPost({
           id: detail.id,
+          userId: detail.userId,
           name: detail.author.full_name,
           role: detail.author.bio ?? "Member",
           time: detail.time,
@@ -223,16 +225,22 @@ export default function PostView() {
 
         <View style={styles.postCard}>
           <View style={styles.postHeader}>
-            <View style={styles.postAvatarWrap}>
-              <Image source={avatarSrc} style={styles.postAvatar} contentFit="cover" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={styles.nameRowSmall}>
-                <Text style={styles.postName}>{post.name}</Text>
-                <MaterialIcons name="verified" size={16} color={colors.accentYellow} />
+            <Pressable
+              style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flex: 1 }}
+              onPress={() => router.push(`/user/${post.userId}` as any)}
+              hitSlop={6}
+            >
+              <View style={styles.postAvatarWrap}>
+                <Image source={avatarSrc} style={styles.postAvatar} contentFit="cover" />
               </View>
-              <Text style={styles.postMeta}>{post.role}</Text>
-            </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.nameRowSmall}>
+                  <Text style={styles.postName}>{post.name}</Text>
+                  <MaterialIcons name="verified" size={16} color={colors.accentYellow} />
+                </View>
+                <Text style={styles.postMeta}>{post.role}</Text>
+              </View>
+            </Pressable>
             <Pressable hitSlop={6} style={styles.iconBtn} onPress={() => setDeleteMenuOpen(true)}>
               <MaterialIcons name="more-vert" size={20} color={colors.textMuted} />
             </Pressable>

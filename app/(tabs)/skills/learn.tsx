@@ -1,64 +1,36 @@
 import SafeScreen from "@/components/SafeScreen";
+import { Course, fetchCourses } from "@/services/courses";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-
-type Course = {
-  id: string;
-  title: string;
-  lessons: number;
-  duration: string;
-  level?: string;
-  progress?: number;
-  image: any;
-};
 
 export default function SkillsLearn() {
   const router = useRouter();
   const [profileName, setProfileName] = useState("Guest");
   const [avatarSrc, setAvatarSrc] = useState<any>(require("../../../assets/images/react-logo.png"));
-  useEffect(() => {
-    import("@/services/profile").then(({ fetchMyProfile }) => {
-      fetchMyProfile().then((p) => {
-        setProfileName(p.fullName);
-        if (p.avatarUrl) setAvatarSrc({ uri: p.avatarUrl });
-      });
-    });
-  }, []);
+  const [allCourses, setAllCourses] = useState<Course[]>([]);
 
-  const inProgress: Course[] = useMemo(
-    () => [
-      {
-        id: "c1",
-        title: "Mastering Logo Variations",
-        lessons: 17,
-        duration: "1-2 Hours",
-        progress: 89,
-        image: require("../../../images/image 2.png"),
-      },
-      {
-        id: "c2",
-        title: "UI/UX Design Essentials",
-        lessons: 24,
-        duration: "2-3 Hours",
-        progress: 42,
-        image: require("../../../images/image 1.png"),
-      },
-    ],
-    []
+  useFocusEffect(
+    useCallback(() => {
+      import("@/services/profile").then(({ fetchMyProfile }) => {
+        fetchMyProfile().then((p) => {
+          setProfileName(p.fullName);
+          if (p.avatarUrl) setAvatarSrc({ uri: p.avatarUrl });
+        });
+      });
+
+      fetchCourses().then((data) => {
+        setAllCourses(data);
+      });
+    }, [])
   );
 
-  const recommended: Course = {
-    id: "r1",
-    title: "Designing for Mobile: UI Foundations",
-    lessons: 24,
-    duration: "5-8 Hours",
-    level: "Beginner",
-    image: require("../../../images/Rectangle 93.png"),
-  };
+  const inProgress = allCourses.filter((c) => c.id === "c1" || c.id === "c2");
+  const recommended = allCourses.find((c) => c.id === "r1") || allCourses[0];
+
 
   return (
     <SafeScreen>
@@ -97,20 +69,20 @@ export default function SkillsLearn() {
             {inProgress.map((c) => (
               <View key={c.id} style={styles.courseCard}>
                 <Image source={c.image} style={styles.courseImage} contentFit="cover" />
-              <Pressable style={styles.courseBody} onPress={() => router.push(`/course/${c.id}`)} hitSlop={6}>
+                <Pressable style={styles.courseBody} onPress={() => router.push(`/course/${c.id}`)} hitSlop={6}>
                   <Text style={styles.courseTitle}>{c.title}</Text>
                   <View style={styles.courseMetaRow}>
                     <MaterialIcons name="view-module" size={16} color={colors.textMuted} />
-                    <Text style={styles.courseMetaText}>{c.lessons} Lessons</Text>
+                    <Text style={styles.courseMetaText}>{c.lessonsCount} Lessons</Text>
                     <MaterialIcons name="schedule" size={16} color={colors.textMuted} style={{ marginLeft: spacing.md }} />
                     <Text style={styles.courseMetaText}>{c.duration}</Text>
                   </View>
                   <View style={styles.progressRow}>
                     <Text style={styles.progressLabel}>Progress</Text>
-                    <Text style={styles.progressPercent}>{c.progress}%</Text>
+                    <Text style={styles.progressPercent}>{c.progressPercent}%</Text>
                   </View>
                   <View style={styles.progressTrack}>
-                    <View style={[styles.progressFill, { width: `${c.progress}%` }]} />
+                    <View style={[styles.progressFill, { width: `${c.progressPercent}%` as `${number}%` }]} />
                   </View>
                 </Pressable>
               </View>
@@ -124,29 +96,31 @@ export default function SkillsLearn() {
             <Text style={styles.sectionLink}>View all</Text>
           </Pressable>
         </View>
-        <View style={styles.recoCard}>
-          <Image source={recommended.image} style={styles.recoImage} contentFit="cover" />
-          <View style={styles.recoBody}>
-            <Text style={styles.recoTitle}>{recommended.title}</Text>
-            <Text style={styles.recoSub}>{recommended.lessons} Lessons</Text>
-            <View style={styles.recoMetaRow}>
-              <MaterialIcons name="view-module" size={16} color={colors.textMuted} />
-              <Text style={styles.recoMetaText}>{recommended.lessons} Lessons</Text>
-              <MaterialIcons name="schedule" size={16} color={colors.textMuted} style={{ marginLeft: spacing.md }} />
-              <Text style={styles.recoMetaText}>{recommended.duration}</Text>
-              <MaterialIcons name="person" size={16} color={colors.textMuted} style={{ marginLeft: spacing.md }} />
-              <Text style={styles.recoMetaText}>{recommended.level}</Text>
-            </View>
-            <View style={styles.recoActions}>
-              <Pressable style={[styles.cta, styles.ctaGreen]} hitSlop={6} onPress={() => router.push(`/course/${recommended.id}`)}>
-                <Text style={styles.ctaTextDark}>View</Text>
-              </Pressable>
-              <Pressable style={[styles.cta, styles.ctaYellow]} hitSlop={6} onPress={() => router.push(`/course/${recommended.id}`)}>
-                <Text style={styles.ctaTextDark}>Start</Text>
-              </Pressable>
+        {recommended ? (
+          <View style={styles.recoCard}>
+            <Image source={recommended.image} style={styles.recoImage} contentFit="cover" />
+            <View style={styles.recoBody}>
+              <Text style={styles.recoTitle}>{recommended.title}</Text>
+              <Text style={styles.recoSub}>{recommended.lessonsCount} Lessons</Text>
+              <View style={styles.recoMetaRow}>
+                <MaterialIcons name="view-module" size={16} color={colors.textMuted} />
+                <Text style={styles.recoMetaText}>{recommended.lessonsCount} Lessons</Text>
+                <MaterialIcons name="schedule" size={16} color={colors.textMuted} style={{ marginLeft: spacing.md }} />
+                <Text style={styles.recoMetaText}>{recommended.duration}</Text>
+                <MaterialIcons name="person" size={16} color={colors.textMuted} style={{ marginLeft: spacing.md }} />
+                <Text style={styles.recoMetaText}>{recommended.level}</Text>
+              </View>
+              <View style={styles.recoActions}>
+                <Pressable style={[styles.cta, styles.ctaGreen]} hitSlop={6} onPress={() => router.push(`/course/${recommended.id}`)}>
+                  <Text style={styles.ctaTextDark}>View</Text>
+                </Pressable>
+                <Pressable style={[styles.cta, styles.ctaYellow]} hitSlop={6} onPress={() => router.push(`/course/${recommended.id}`)}>
+                  <Text style={styles.ctaTextDark}>Start</Text>
+                </Pressable>
+              </View>
             </View>
           </View>
-        </View>
+        ) : null}
       </ScrollView>
     </SafeScreen>
   );

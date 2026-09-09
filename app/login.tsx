@@ -34,14 +34,24 @@ export default function Login() {
     }
     setLoading(true);
     try {
-      const { error: authError } = await sb.auth.signInWithPassword({
+      const { data, error: authError } = await sb.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
       if (authError) {
-        setError(authError.message || "Login failed");
+        if (authError.message?.toLowerCase().includes("email not confirmed")) {
+          setError("Email not verified yet. Please check your inbox or tap below to verify.");
+        } else {
+          setError(authError.message || "Login failed");
+        }
         return;
       }
+
+      if (data?.user && !data.user.email_confirmed_at && (data.user as any).confirmed_at === undefined) {
+        router.replace({ pathname: "/verify-email", params: { email: email.trim() } } as any);
+        return;
+      }
+
       await refreshProfile();
       router.replace("/(tabs)/home");
     } catch (e: any) {
@@ -183,7 +193,7 @@ export default function Login() {
         </View>
 
         <View style={styles.bottomRow}>
-          <Text style={styles.bottomText}>Don't have an account? </Text>
+          <Text style={styles.bottomText}>Don&apos;t have an account? </Text>
           <Pressable onPress={() => router.push("/signup")} hitSlop={6}>
             <Text style={styles.bottomLink}>Sign Up</Text>
           </Pressable>

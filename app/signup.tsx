@@ -56,7 +56,11 @@ export default function Signup() {
         await sb.from("profiles").upsert({ id: userId }, { onConflict: "id" });
       }
       await refreshProfile();
-      router.replace("/profile-setup");
+      if (data.session) {
+        router.replace("/profile-setup");
+      } else {
+        router.replace({ pathname: "/verify-email", params: { email: email.trim() } } as any);
+      }
     } catch (e: any) {
       setError(e?.message || "Network error — check your connection");
     } finally {

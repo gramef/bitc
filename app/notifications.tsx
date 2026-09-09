@@ -1,4 +1,5 @@
 import SafeScreen from "@/components/SafeScreen";
+import { EmptyState } from "@/components/ui";
 import { fetchNotifications } from "@/services/notifications";
 import { colors, fonts, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -60,55 +61,71 @@ export default function Notifications() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.groupHeader}>
-          <Text style={styles.groupLabel}>TODAY</Text>
-          <Pressable hitSlop={6} onPress={markAllRead}>
-            <Text style={styles.groupAction}>Mark all as read</Text>
-          </Pressable>
-        </View>
-
-        {today.map((n, idx) => (
-          <View key={n.id} style={{}}>
-            <View style={styles.row}>
-              <View style={[styles.dot, n.unread ? styles.dotActive : styles.dotInactive]} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.title}>{n.title}</Text>
-                <Text style={styles.subtitle}>{n.subtitle}</Text>
-                <View style={styles.footerRow}>
-                  <Text style={styles.time}>{n.time}</Text>
-                  <Pressable style={styles.viewMore} hitSlop={6} onPress={() => router.push(`/notifications/${n.routeId}`)}>
-                    <Text style={styles.viewText}>View More</Text>
-                    <MaterialIcons name="arrow-forward" size={16} color={colors.accentYellow} />
+        {list.length === 0 ? (
+          <EmptyState
+            icon="notifications-none"
+            title="No notifications yet"
+            subtitle="We'll notify you when important updates arrive"
+          />
+        ) : (
+          <>
+            {today.length > 0 && (
+              <>
+                <View style={styles.groupHeader}>
+                  <Text style={styles.groupLabel}>TODAY</Text>
+                  <Pressable hitSlop={6} onPress={markAllRead}>
+                    <Text style={styles.groupAction}>Mark all as read</Text>
                   </Pressable>
                 </View>
-              </View>
-            </View>
-            <View style={styles.divider} />
-          </View>
-        ))}
 
-        <Text style={[styles.groupLabel, { marginTop: spacing.lg }]}>YESTERDAY</Text>
+                {today.map((n) => (
+                  <View key={n.id}>
+                    <View style={styles.row}>
+                      <View style={[styles.dot, n.unread ? styles.dotActive : styles.dotInactive]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.title}>{n.title}</Text>
+                        <Text style={styles.subtitle}>{n.subtitle}</Text>
+                        <View style={styles.footerRow}>
+                          <Text style={styles.time}>{n.time}</Text>
+                          <Pressable style={styles.viewMore} hitSlop={6} onPress={() => router.push(`/notifications/${n.routeId}` as any)}>
+                            <Text style={styles.viewText}>View More</Text>
+                            <MaterialIcons name="arrow-forward" size={16} color={colors.accentYellow} />
+                          </Pressable>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={styles.divider} />
+                  </View>
+                ))}
+              </>
+            )}
 
-        {yesterday.map((n) => (
-          <View key={n.id} style={{}}>
-            <View style={styles.row}>
-              <View style={[styles.dot, styles.dotInactive]} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.title}>{n.title}</Text>
-                <Text style={styles.subtitle}>{n.subtitle}</Text>
-                <View style={styles.footerRow}>
-                  <Text style={styles.time}>{n.time}</Text>
-                  <Pressable style={styles.viewMore} hitSlop={6} onPress={() => router.push(`/notifications/${n.routeId}`)}>
-                    <Text style={styles.viewText}>View More</Text>
-                    <MaterialIcons name="arrow-forward" size={16} color={colors.accentYellow} />
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-            <View style={styles.divider} />
-          </View>
-        ))}
-
+            {yesterday.length > 0 && (
+              <>
+                <Text style={[styles.groupLabel, { marginTop: spacing.lg }]}>YESTERDAY</Text>
+                {yesterday.map((n) => (
+                  <View key={n.id}>
+                    <View style={styles.row}>
+                      <View style={[styles.dot, styles.dotInactive]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.title}>{n.title}</Text>
+                        <Text style={styles.subtitle}>{n.subtitle}</Text>
+                        <View style={styles.footerRow}>
+                          <Text style={styles.time}>{n.time}</Text>
+                          <Pressable style={styles.viewMore} hitSlop={6} onPress={() => router.push(`/notifications/${n.routeId}` as any)}>
+                            <Text style={styles.viewText}>View More</Text>
+                            <MaterialIcons name="arrow-forward" size={16} color={colors.accentYellow} />
+                          </Pressable>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={styles.divider} />
+                  </View>
+                ))}
+              </>
+            )}
+          </>
+        )}
       </ScrollView>
     </SafeScreen>
   );

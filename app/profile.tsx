@@ -6,7 +6,7 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { Alert, Modal, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Modal, Platform, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
 
 
 type Tab = "Posts" | "Portfolio" | "Reviews";
@@ -81,6 +81,14 @@ export default function UserProfile() {
   }
 
   async function handleSignOut() {
+    if (Platform.OS === "web") {
+      const confirmed = typeof window !== "undefined" ? window.confirm("Are you sure you want to sign out?") : true;
+      if (confirmed) {
+        await signOut();
+        router.replace("/login");
+      }
+      return;
+    }
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
       { text: "Cancel", style: "cancel" },
       {
@@ -183,11 +191,41 @@ export default function UserProfile() {
           </Pressable>
         </View>
 
-        {/* Settings button */}
-        <Pressable style={styles.signOutBtn} hitSlop={6} onPress={() => router.push("/settings" as any)}>
-          <MaterialIcons name="settings" size={18} color={colors.textSecondary} />
-          <Text style={[styles.signOutText, { color: colors.textSecondary }]}>Settings</Text>
-        </Pressable>
+        {/* Quick Profile Nav: Messages & Settings */}
+        <View style={styles.topNavRow}>
+          <Pressable style={styles.topNavBtn} hitSlop={6} onPress={() => router.push("/messages" as any)}>
+            <MaterialIcons name="mail-outline" size={18} color={colors.textPrimary} />
+            <Text style={styles.topNavBtnText}>Messages</Text>
+          </Pressable>
+          <Pressable style={styles.topNavBtn} hitSlop={6} onPress={() => router.push("/settings" as any)}>
+            <MaterialIcons name="settings" size={18} color={colors.textSecondary} />
+            <Text style={[styles.topNavBtnText, { color: colors.textSecondary }]}>Settings</Text>
+          </Pressable>
+        </View>
+
+        {/* Super Admin Console Launcher (for Admins / Dev Mode) */}
+        {(authProfile?.role === "admin" || __DEV__) && (
+          <Pressable
+            style={styles.adminBanner}
+            onPress={() => router.push("/admin" as any)}
+          >
+            <View style={styles.adminBannerLeft}>
+              <View style={styles.adminIconWrap}>
+                <MaterialIcons name="admin-panel-settings" size={20} color="#FF7675" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={styles.adminBannerTitle}>Super Admin Console</Text>
+                  <View style={styles.adminPill}>
+                    <Text style={styles.adminPillText}>WEB</Text>
+                  </View>
+                </View>
+                <Text style={styles.adminBannerSubtitle}>Live event rosters, creator badges & room moderation</Text>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
+          </Pressable>
+        )}
 
         <View style={styles.headerText}>
           <View style={styles.nameRow}>
@@ -312,15 +350,49 @@ export default function UserProfile() {
           </View>
         ) : tab === "Portfolio" ? (
           <View style={styles.list}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.sm }}>
+              <Text style={{ color: colors.textSecondary, fontFamily: fonts.semibold, fontSize: fonts.size.sm }}>
+                Showcase ({portfolio.length})
+              </Text>
+              <Pressable
+                style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.accentYellow, paddingHorizontal: 12, paddingVertical: 6, borderRadius: radii.pill }}
+                onPress={() => setPortfolioComposeOpen(true)}
+              >
+                <MaterialIcons name="add" size={16} color={colors.textDark} />
+                <Text style={{ color: colors.textDark, fontFamily: fonts.bold, fontSize: fonts.size.xs }}>Add Project</Text>
+              </Pressable>
+            </View>
+
             {portfolio.length === 0 ? (
-              <View style={styles.postCard}>
-                <Text style={styles.postText}>No portfolio items yet</Text>
+              <View style={[styles.postCard, { alignItems: "center", paddingVertical: spacing.xl }]}>
+                <MaterialIcons name="collections" size={40} color={colors.textSecondary} style={{ marginBottom: spacing.sm }} />
+                <Text style={[styles.postText, { textAlign: "center", marginBottom: spacing.xs }]}>No portfolio projects yet</Text>
+                <Text style={{ color: colors.textSecondary, fontFamily: fonts.regular, fontSize: fonts.size.sm, textAlign: "center", marginBottom: spacing.md }}>
+                  Showcase your best creative work, case studies, and client projects.
+                </Text>
+                <Pressable
+                  style={{ backgroundColor: colors.accentYellow, paddingHorizontal: 20, paddingVertical: 10, borderRadius: radii.pill }}
+                  onPress={() => setPortfolioComposeOpen(true)}
+                >
+                  <Text style={{ color: colors.textDark, fontFamily: fonts.bold, fontSize: fonts.size.sm }}>+ Add Your First Project</Text>
+                </Pressable>
               </View>
             ) : (
               portfolio.map((it) => (
                 <View key={it.id} style={styles.postCard}>
-                  {it.image_url ? <Image source={{ uri: it.image_url }} style={{ width: "100%", height: 160, borderRadius: 12 }} contentFit="cover" /> : null}
-                  <Text style={[styles.postText, { marginTop: 8 }]}>{it.title}</Text>
+                  {it.image_url ? (
+                    <Image source={{ uri: it.image_url }} style={{ width: "100%", height: 180, borderRadius: radii.md }} contentFit="cover" />
+                  ) : (
+                    <View style={{ width: "100%", height: 120, borderRadius: radii.md, backgroundColor: "#1e1e1e", alignItems: "center", justifyContent: "center" }}>
+                      <MaterialIcons name="palette" size={32} color={colors.textSecondary} />
+                    </View>
+                  )}
+                  <Text style={[styles.postText, { marginTop: spacing.sm, fontFamily: fonts.semibold, fontSize: fonts.size.md }]}>{it.title}</Text>
+                  {it.created_at ? (
+                    <Text style={{ color: colors.textSecondary, fontFamily: fonts.regular, fontSize: fonts.size.xs, marginTop: 2 }}>
+                      Added {new Date(it.created_at).toLocaleDateString("en-GB", { month: "short", day: "numeric", year: "numeric" })}
+                    </Text>
+                  ) : null}
                 </View>
               ))
             )}
@@ -513,6 +585,9 @@ export default function UserProfile() {
                       if (res.ok) {
                         const list = await m.fetchMyPortfolio();
                         setPortfolio(list);
+                        setStats((prev) =>
+                          prev.map((s) => (s.label === "Projects" ? { ...s, value: String(list.length) } : s))
+                        );
                       }
                       setPortfolioTitle("");
                       setPortfolioImageUrl("");
@@ -773,23 +848,77 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
     paddingVertical: 2,
   },
-  signOutBtn: {
+  topNavRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-end",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.md,
+  },
+  topNavBtn: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
-    paddingVertical: spacing.md,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radii.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.outline,
+  },
+  topNavBtnText: {
+    color: colors.textPrimary,
+    fontFamily: fonts.semibold,
+    fontSize: 13,
+  },
+  adminBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#201214",
+    borderWidth: 1,
+    borderColor: "#FF767550",
+    borderRadius: radii.card,
     marginHorizontal: spacing.lg,
     marginTop: spacing.md,
-    borderRadius: radii.card,
-    borderWidth: 1,
-    borderColor: "#5a2020",
-    backgroundColor: "#1a0a0a",
+    padding: spacing.md,
   },
-  signOutText: {
-    color: "#ff6b6b",
-    fontFamily: fonts.semibold,
-    fontSize: fonts.size.md,
+  adminBannerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    flex: 1,
+  },
+  adminIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "#FF767520",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  adminBannerTitle: {
+    color: "#fff",
+    fontFamily: fonts.bold,
+    fontSize: 14,
+  },
+  adminBannerSubtitle: {
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  adminPill: {
+    backgroundColor: "#FF7675",
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  adminPillText: {
+    color: "#fff",
+    fontFamily: fonts.bold,
+    fontSize: 9,
   },
   fabMain: {
     position: "absolute",

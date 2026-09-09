@@ -83,7 +83,7 @@ export default function OnboardingIdentity() {
               </View>
               <Text style={styles.cardTitle}>Business</Text>
               <Text style={styles.cardBody}>
-                I'm looking to hire creatives & grow my brand.
+                I&apos;m looking to hire creatives & grow my brand.
               </Text>
             </Card>
           </Pressable>

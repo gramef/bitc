@@ -31,6 +31,10 @@ export default function ProfileSetup() {
 
   // Pre-fill from AuthContext profile
   useEffect(() => {
+    if (user && !user.email_confirmed_at && (user as any).confirmed_at === undefined) {
+      router.replace({ pathname: "/verify-email", params: { email: user.email } } as any);
+      return;
+    }
     if (profile) {
       if (profile.fullName !== "Guest") setFullName(profile.fullName);
       setBio(profile.bio ?? "");
@@ -39,7 +43,7 @@ export default function ProfileSetup() {
         setDisplayAvatarSrc({ uri: profile.avatarUrl });
       }
     }
-  }, [profile]);
+  }, [user, profile]);
 
   async function pickAvatar() {
     setError(null);

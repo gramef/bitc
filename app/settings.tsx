@@ -6,7 +6,9 @@ import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
+    ActivityIndicator,
     Alert,
+    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -36,7 +38,33 @@ export default function Settings() {
         ? { uri: profile.avatarUrl }
         : require("../assets/images/react-logo.png");
 
+    const [signingOut, setSigningOut] = useState(false);
+
+    async function executeSignOut() {
+        setSigningOut(true);
+        try {
+            await signOut();
+            router.replace("/login");
+        } catch (err) {
+            console.error("Sign out error:", err);
+            router.replace("/login");
+        } finally {
+            setSigningOut(false);
+        }
+    }
+
     function handleSignOut() {
+        if (Platform.OS === "web") {
+            const confirmed =
+                typeof window !== "undefined"
+                    ? window.confirm("Are you sure you want to sign out of your account?")
+                    : true;
+            if (confirmed) {
+                executeSignOut();
+            }
+            return;
+        }
+
         Alert.alert(
             "Sign Out",
             "Are you sure you want to sign out of your account?",
@@ -45,16 +73,24 @@ export default function Settings() {
                 {
                     text: "Sign Out",
                     style: "destructive",
-                    onPress: async () => {
-                        await signOut();
-                        router.replace("/login");
-                    },
+                    onPress: executeSignOut,
                 },
             ]
         );
     }
 
     function handleDeleteAccount() {
+        if (Platform.OS === "web") {
+            const confirmed =
+                typeof window !== "undefined"
+                    ? window.confirm("This action cannot be undone. All your data will be permanently removed. Continue?")
+                    : true;
+            if (confirmed && typeof window !== "undefined") {
+                window.alert("Please contact support@bitc.app to delete your account.");
+            }
+            return;
+        }
+
         Alert.alert(
             "Delete Account",
             "This action cannot be undone. All your data will be permanently removed.",
@@ -237,9 +273,19 @@ export default function Settings() {
 
                 {/* Danger Zone */}
                 <View style={styles.dangerSection}>
-                    <Pressable style={styles.signOutBtn} onPress={handleSignOut}>
-                        <MaterialIcons name="logout" size={20} color="#ff4444" />
-                        <Text style={styles.signOutText}>Sign Out</Text>
+                    <Pressable
+                        style={[styles.signOutBtn, signingOut && { opacity: 0.6 }]}
+                        onPress={handleSignOut}
+                        disabled={signingOut}
+                    >
+                        {signingOut ? (
+                            <ActivityIndicator size="small" color="#ff4444" />
+                        ) : (
+                            <MaterialIcons name="logout" size={20} color="#ff4444" />
+                        )}
+                        <Text style={styles.signOutText}>
+                            {signingOut ? "Signing Out…" : "Sign Out"}
+                        </Text>
                     </Pressable>
 
                     <Pressable style={styles.deleteBtn} onPress={handleDeleteAccount}>

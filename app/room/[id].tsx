@@ -1,4 +1,5 @@
 import SafeScreen from "@/components/SafeScreen";
+import * as Clipboard from "expo-clipboard";
 import { useAuth } from "@/contexts/AuthContext";
 import { connectToRoom as connectAudio, disconnectFromRoom as disconnectAudio, setMicrophoneEnabled, isConnected as isAudioConnected } from "@/lib/audio-provider";
 import {
@@ -22,11 +23,11 @@ import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActionSheetIOS,
   Alert,
-  Animated,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -37,16 +38,6 @@ import {
 
 const PLACEHOLDER_AVATAR = require("../../assets/images/react-logo.png");
 
-const TOPIC_COLORS: Record<string, string> = {
-  Music: "#E17055",
-  Tech: "#6C5CE7",
-  Business: "#00B894",
-  Design: "#FDCB6E",
-  "Career Advice": "#74B9FF",
-  "Open Mic": "#FF7675",
-  Podcast: "#A29BFE",
-};
-
 export default function RoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -56,29 +47,20 @@ export default function RoomScreen() {
   const [loading, setLoading] = useState(true);
   const [audioConnected, setAudioConnected] = useState(false);
   const [speakingUsers, setSpeakingUsers] = useState<Set<string>>(new Set());
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const [showEndModal, setShowEndModal] = useState(false);
+  const [isSpeakerOutput, setIsSpeakerOutput] = useState(true);
+  const [isMicOn, setIsMicOn] = useState(true);
+  const [handRaised, setHandRaised] = useState(false);
+  const [screenSharing, setScreenSharing] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
 
   const myParticipant = participants.find((p) => p.user_id === user?.id);
   const isHost = room?.host_id === user?.id;
-  const isCoHost = myParticipant?.role === "co_host";
-  const isSpeaker = myParticipant?.role === "speaker" || myParticipant?.role === "host" || myParticipant?.role === "co_host";
+  const isCoHost = myParticipant?.role === "co_host" || (room?.moderator_ids?.includes(user?.id ?? ""));
   const canModerate = isHost || isCoHost;
 
   const speakers = participants.filter((p) => ["host", "co_host", "speaker"].includes(p.role));
   const listeners = participants.filter((p) => p.role === "listener");
-  const handsRaised = listeners.filter((p) => p.hand_raised);
-
-  // Pulse animation for live indicator
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 0.4, duration: 1000, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [pulseAnim]);
 
   const loadRoom = useCallback(async () => {
     if (!id) return;
@@ -98,19 +80,22 @@ export default function RoomScreen() {
       await joinRoom(id);
       await loadRoom();
 
-      // Attempt LiveKit audio connection
       const roomData = await fetchRoomById(id);
       const iAmHost = roomData?.host_id === user.id;
       const connected = await connectAudio(
         id,
         user.id,
         user.user_metadata?.full_name ?? "Guest",
-        iAmHost, // hosts can publish immediately
+        iAmHost,
         {
           onSpeakingChanged: (identity, speaking) => {
             setSpeakingUsers((prev) => {
               const next = new Set(prev);
-              speaking ? next.add(identity) : next.delete(identity);
+              if (speaking) {
+                next.add(identity);
+              } else {
+                next.delete(identity);
+              }
               return next;
             });
           },
@@ -125,7 +110,6 @@ export default function RoomScreen() {
       setAudioConnected(connected);
     })();
 
-    // Realtime subscription
     const channel = subscribeToRoomParticipants(id, () => loadRoom());
 
     return () => {
@@ -134,46 +118,54 @@ export default function RoomScreen() {
     };
   }, [id, user, loadRoom]);
 
-  async function handleLeave() {
+  async function handleLeaveClick() {
     if (!id) return;
-    disconnectAudio();
     if (isHost) {
-      Alert.alert(
-        "End Room?",
-        "As the host, leaving will end the room for everyone.",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "End Room",
-            style: "destructive",
-            onPress: async () => {
-              await endRoom(id);
-              router.back();
-            },
-          },
-        ]
-      );
+      setShowEndModal(true);
     } else {
+      disconnectAudio();
       await leaveRoom(id);
       router.back();
     }
   }
 
+  async function handleConfirmEndRoom() {
+    if (!id) return;
+    setShowEndModal(false);
+    disconnectAudio();
+    await endRoom(id);
+    router.back();
+  }
+
   async function handleToggleMute() {
-    if (!id || !myParticipant) return;
-    const newMuted = !myParticipant.is_muted;
-    await toggleMute(id, newMuted);
-    // Sync with LiveKit audio
-    if (audioConnected) {
-      await setMicrophoneEnabled(!newMuted);
+    const nextMic = !isMicOn;
+    setIsMicOn(nextMic);
+    if (id && myParticipant) {
+      await toggleMute(id, !nextMic);
+      await loadRoom();
     }
-    await loadRoom();
+    if (audioConnected) {
+      await setMicrophoneEnabled(nextMic);
+    }
   }
 
   async function handleRaiseHand() {
-    if (!id || !myParticipant) return;
-    await raiseHand(id, !myParticipant.hand_raised);
-    await loadRoom();
+    const nextHand = !handRaised;
+    setHandRaised(nextHand);
+    if (id && myParticipant) {
+      await raiseHand(id, nextHand);
+      await loadRoom();
+    }
+  }
+
+  async function handleShareRoom() {
+    try {
+      const roomUrl = `http://localhost:8081/room/${id}`;
+      await Clipboard.setStringAsync(roomUrl);
+      Alert.alert("Link Copied!", "Room link copied to clipboard. Share it with your friends to join!");
+    } catch {
+      Alert.alert("Room Invite", `Share this link with others: http://localhost:8081/room/${id}`);
+    }
   }
 
   function handleParticipantAction(participant: ParticipantWithProfile) {
@@ -230,7 +222,6 @@ export default function RoomScreen() {
         (idx) => { if (idx < actions.length) actions[idx](); }
       );
     } else {
-      // Android fallback
       Alert.alert(
         participant.full_name,
         "Choose an action",
@@ -245,12 +236,18 @@ export default function RoomScreen() {
     }
   }
 
+  function formatShortName(fullName: string): string {
+    const parts = fullName.trim().split(" ");
+    if (parts.length === 1) return parts[0];
+    return `${parts[0]} ${parts[parts.length - 1][0]}.`;
+  }
+
   if (loading) {
     return (
       <SafeScreen>
         <View style={styles.loadingWrap}>
           <MaterialIcons name="podcasts" size={48} color={colors.accentYellow} />
-          <Text style={styles.loadingText}>Joining room…</Text>
+          <Text style={styles.loadingText}>Joining voice room…</Text>
         </View>
       </SafeScreen>
     );
@@ -261,7 +258,7 @@ export default function RoomScreen() {
       <SafeScreen>
         <View style={styles.loadingWrap}>
           <MaterialIcons name="mic-off" size={48} color={colors.textSecondary} />
-          <Text style={styles.loadingText}>This room has ended</Text>
+          <Text style={styles.loadingText}>This voice room has ended</Text>
           <Pressable style={styles.backBtn} onPress={() => router.back()}>
             <Text style={styles.backBtnText}>Go Back</Text>
           </Pressable>
@@ -272,333 +269,314 @@ export default function RoomScreen() {
 
   return (
     <SafeScreen>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Header */}
+      <View style={styles.container}>
+        {/* Figma Header */}
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={8}>
-            <MaterialIcons name="keyboard-arrow-down" size={28} color="#fff" />
-          </Pressable>
-          <View style={styles.headerCenter}>
-            <Animated.View style={[styles.liveIndicator, { opacity: pulseAnim }]} />
-            <Text style={styles.headerLive}>LIVE</Text>
-            {audioConnected && (
-              <View style={styles.audioBadge}>
-                <MaterialIcons name="volume-up" size={10} color={colors.accentGreen} />
-              </View>
-            )}
-          </View>
-          <Pressable onPress={handleLeave} hitSlop={8}>
-            <MaterialIcons name="close" size={22} color="#FF4444" />
-          </Pressable>
-        </View>
-
-        {/* Room Info */}
-        <View style={styles.roomInfo}>
-          {room.topic && (
-            <View style={[styles.topicBadge, { backgroundColor: (TOPIC_COLORS[room.topic] ?? "#888") + "20" }]}>
-              <Text style={[styles.topicText, { color: TOPIC_COLORS[room.topic] ?? "#888" }]}>{room.topic}</Text>
+          <View style={styles.headerLeft}>
+            <View style={styles.greenIconCircle}>
+              <MaterialIcons name="mic" size={20} color="#fff" />
             </View>
-          )}
-          <Text style={styles.roomTitle}>{room.title}</Text>
-          {room.description && <Text style={styles.roomDesc}>{room.description}</Text>}
-        </View>
+            <View style={styles.headerTitleWrap}>
+              <Text style={styles.roomTitleText} numberOfLines={1}>{room.title}</Text>
+              <Text style={styles.roomSubtext}>
+                Voice chat • {listeners.length + speakers.length} listening
+              </Text>
+            </View>
+          </View>
 
-        {/* Speakers Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>
-            <MaterialIcons name="mic" size={14} color={colors.accentYellow} /> Speakers
-          </Text>
-          <View style={styles.speakerGrid}>
-            {speakers.map((p) => (
-              <Pressable
-                key={p.user_id}
-                style={styles.speakerTile}
-                onLongPress={() => handleParticipantAction(p)}
-                delayLongPress={300}
-              >
-                <View style={[
-                  styles.speakerAvatarWrap,
-                  (!p.is_muted || speakingUsers.has(p.user_id)) && styles.speakerAvatarActive,
-                  p.role === "host" && styles.speakerAvatarHost,
-                  speakingUsers.has(p.user_id) && styles.speakerAvatarSpeaking,
-                ]}>
-                  <Image
-                    source={p.avatar_url ? { uri: p.avatar_url } : PLACEHOLDER_AVATAR}
-                    style={styles.speakerAvatar}
-                    contentFit="cover"
-                  />
-                  {/* Mic indicator */}
-                  <View style={[styles.micBadge, p.is_muted ? styles.micMuted : styles.micActive]}>
-                    <MaterialIcons
-                      name={p.is_muted ? "mic-off" : "mic"}
-                      size={10}
-                      color={p.is_muted ? "#FF4444" : "#fff"}
-                    />
-                  </View>
-                </View>
-                <Text style={styles.speakerName} numberOfLines={1}>{p.full_name}</Text>
-                <View style={styles.roleTag}>
-                  {p.role === "host" && <MaterialIcons name="star" size={10} color={colors.accentYellow} />}
-                  {p.role === "co_host" && <MaterialIcons name="star-half" size={10} color={colors.accentGreen} />}
-                  <Text style={[
-                    styles.roleText,
-                    p.role === "host" && { color: colors.accentYellow },
-                    p.role === "co_host" && { color: colors.accentGreen },
-                  ]}>
-                    {p.role === "host" ? "Host" : p.role === "co_host" ? "Co-host" : "Speaker"}
-                  </Text>
-                </View>
-              </Pressable>
-            ))}
+          <View style={styles.headerRight}>
+            <Pressable
+              style={styles.iconBtn}
+              onPress={() => {
+                Alert.alert("Room Info", `${room.title}\nHost: ${room.host_name}`);
+              }}
+              hitSlop={8}
+            >
+              <MaterialIcons name="more-vert" size={22} color="#fff" />
+            </Pressable>
+
+            <Pressable style={styles.endBtn} onPress={handleLeaveClick}>
+              <Text style={styles.endBtnText}>{isHost ? "End" : "Leave"}</Text>
+            </Pressable>
           </View>
         </View>
 
-        {/* Raised Hands */}
-        {canModerate && handsRaised.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>
-              ✋ Raised Hands ({handsRaised.length})
-            </Text>
-            <View style={styles.handsList}>
-              {handsRaised.map((p) => (
+        {/* 3-Column Participant Grid */}
+        <ScrollView contentContainerStyle={styles.gridContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.avatarGrid}>
+            {participants.map((p) => {
+              const isMe = p.user_id === user?.id;
+              const isSpeakingNow = speakingUsers.has(p.user_id) || (isMicOn && isMe);
+              const displayName = isMe ? "You" : formatShortName(p.full_name);
+
+              return (
                 <Pressable
                   key={p.user_id}
-                  style={styles.handCard}
-                  onPress={() => handleParticipantAction(p)}
+                  style={styles.gridItem}
+                  onLongPress={() => handleParticipantAction(p)}
+                  delayLongPress={300}
                 >
-                  <View style={styles.handAvatar}>
+                  <View style={[styles.avatarBorderWrap, isSpeakingNow && styles.activeSpeakerBorder]}>
                     <Image
                       source={p.avatar_url ? { uri: p.avatar_url } : PLACEHOLDER_AVATAR}
-                      style={{ width: 32, height: 32, borderRadius: 16 }}
+                      style={styles.gridAvatar}
                       contentFit="cover"
                     />
                   </View>
-                  <Text style={styles.handName} numberOfLines={1}>{p.full_name}</Text>
-                  <Pressable
-                    style={styles.inviteBtn}
-                    onPress={async () => { await promoteToSpeaker(id!, p.user_id); await loadRoom(); }}
+                  <Text
+                    style={[styles.gridName, isSpeakingNow && styles.gridNameActive]}
+                    numberOfLines={1}
                   >
-                    <MaterialIcons name="mic" size={14} color={colors.textDark} />
-                    <Text style={styles.inviteBtnText}>Invite</Text>
-                  </Pressable>
+                    {displayName} {p.role === "host" ? "🎙️" : ""}
+                  </Text>
                 </Pressable>
-              ))}
-            </View>
+              );
+            })}
           </View>
-        )}
+        </ScrollView>
 
-        {/* Listeners */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>
-            <MaterialIcons name="headset" size={14} color={colors.textSecondary} /> Listeners ({listeners.length})
-          </Text>
-          <View style={styles.listenerGrid}>
-            {listeners.map((p) => (
-              <Pressable
-                key={p.user_id}
-                style={styles.listenerTile}
-                onLongPress={() => handleParticipantAction(p)}
-                delayLongPress={300}
-              >
-                <View style={styles.listenerAvatarWrap}>
-                  <Image
-                    source={p.avatar_url ? { uri: p.avatar_url } : PLACEHOLDER_AVATAR}
-                    style={styles.listenerAvatar}
-                    contentFit="cover"
-                  />
-                  {p.hand_raised && (
-                    <View style={styles.handBadge}>
-                      <Text style={{ fontSize: 10 }}>✋</Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={styles.listenerName} numberOfLines={1}>{p.full_name}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-      </ScrollView>
-
-      {/* Bottom Controls */}
-      <View style={styles.controls}>
-        {/* Leave */}
-        <Pressable style={styles.leaveBtn} onPress={handleLeave}>
-          <MaterialIcons name="call-end" size={20} color="#fff" />
-          <Text style={styles.leaveBtnText}>{isHost ? "End" : "Leave"}</Text>
-        </Pressable>
-
-        <View style={styles.controlsRight}>
-          {/* Raise Hand (listeners only) */}
-          {!isSpeaker && (
+        {/* Figma Floating Bottom Bar */}
+        <View style={styles.floatingBarWrap}>
+          <View style={styles.floatingBar}>
+            {/* 1. Mic button */}
             <Pressable
-              style={[styles.controlBtn, myParticipant?.hand_raised && styles.controlBtnActive]}
-              onPress={handleRaiseHand}
-            >
-              <Text style={{ fontSize: 20 }}>✋</Text>
-            </Pressable>
-          )}
-
-          {/* Mic toggle (speakers only) */}
-          {isSpeaker && (
-            <Pressable
-              style={[styles.controlBtn, !myParticipant?.is_muted && styles.controlBtnMicActive]}
+              style={[styles.barIconBtn, isMicOn && styles.barIconBtnActive]}
               onPress={handleToggleMute}
             >
               <MaterialIcons
-                name={myParticipant?.is_muted ? "mic-off" : "mic"}
-                size={24}
-                color={myParticipant?.is_muted ? "#FF4444" : "#fff"}
+                name={isMicOn ? "mic" : "mic-off"}
+                size={22}
+                color={isMicOn ? "#228B6D" : "#5F6C7B"}
               />
             </Pressable>
-          )}
 
-          {/* Room settings for host */}
-          {isHost && (
+            {/* 2. Speaker output toggle */}
             <Pressable
-              style={styles.controlBtn}
+              style={styles.barIconBtn}
               onPress={() => {
-                Alert.alert(
-                  "Room Settings",
-                  `${participants.length} participants\n${speakers.length} speakers\n${listeners.length} listeners`,
-                  [
-                    { text: "End Room", style: "destructive", onPress: async () => { await endRoom(id!); router.back(); } },
-                    { text: "Close", style: "cancel" },
-                  ]
-                );
+                const nextState = !isSpeakerOutput;
+                setIsSpeakerOutput(nextState);
+                Alert.alert("Audio Mode", nextState ? "Output set to Speaker 🔊" : "Output set to Earpiece/Headset 🎧");
               }}
             >
-              <MaterialIcons name="settings" size={22} color={colors.textSecondary} />
+              <MaterialIcons
+                name={isSpeakerOutput ? "volume-up" : "headset"}
+                size={22}
+                color="#228B6D"
+              />
             </Pressable>
-          )}
+
+            {/* 3. Hand raise button */}
+            <Pressable
+              style={[styles.barIconBtn, handRaised && styles.barIconBtnActive]}
+              onPress={handleRaiseHand}
+            >
+              <MaterialIcons
+                name="pan-tool"
+                size={22}
+                color={handRaised ? colors.accentYellow : "#5F6C7B"}
+              />
+            </Pressable>
+
+            {/* 4. Presentation/Screen Share */}
+            <Pressable
+              style={[styles.barIconBtn, screenSharing && styles.barIconBtnActive]}
+              onPress={() => {
+                const nextState = !screenSharing;
+                setScreenSharing(nextState);
+                Alert.alert("Screen Presentation", nextState ? "Presentation mode enabled 💻" : "Presentation mode turned off");
+              }}
+            >
+              <MaterialIcons
+                name="desktop-mac"
+                size={22}
+                color={screenSharing ? colors.accentYellow : "#5F6C7B"}
+              />
+            </Pressable>
+
+            {/* 5. Add user / Invite */}
+            <Pressable
+              style={styles.barIconBtn}
+              onPress={() => setShowInviteModal(true)}
+            >
+              <MaterialIcons name="person-add" size={22} color="#5F6C7B" />
+            </Pressable>
+          </View>
         </View>
+
+        {/* Invite & Share Modal */}
+        <Modal
+          visible={showInviteModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowInviteModal(false)}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Invite Members</Text>
+              <Text style={styles.modalSubtitle}>
+                Copy the room link below or share it to bring others into this voice conversation.
+              </Text>
+
+              <Pressable style={styles.modalEndBtn} onPress={handleShareRoom}>
+                <Text style={styles.modalEndBtnText}>Copy Room Link 🔗</Text>
+              </Pressable>
+
+              <Pressable style={styles.modalCancelBtn} onPress={() => setShowInviteModal(false)}>
+                <Text style={styles.modalCancelBtnText}>Close</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Figma End Voice Chat Confirmation Modal */}
+        <Modal
+          visible={showEndModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowEndModal(false)}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>End voice chat</Text>
+              <Text style={styles.modalSubtitle}>
+                The voice chat will end for everyone in this room.
+              </Text>
+
+              <Pressable style={styles.modalEndBtn} onPress={handleConfirmEndRoom}>
+                <Text style={styles.modalEndBtnText}>End for Everyone</Text>
+              </Pressable>
+
+              <Pressable style={styles.modalCancelBtn} onPress={() => setShowEndModal(false)}>
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
       </View>
     </SafeScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: 120 },
-  // Loading / Empty
+  container: { flex: 1, backgroundColor: "#0b0b0b" },
   loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.md },
   loadingText: { color: colors.textSecondary, fontFamily: fonts.regular, fontSize: fonts.size.lg },
   backBtn: { backgroundColor: colors.surface, borderRadius: radii.pill, paddingHorizontal: 24, paddingVertical: 12, borderWidth: 1, borderColor: colors.outline, marginTop: spacing.md },
   backBtnText: { color: colors.textPrimary, fontFamily: fonts.semibold, fontSize: fonts.size.md },
   // Header
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.lg },
-  headerCenter: { flexDirection: "row", alignItems: "center", gap: 6 },
-  liveIndicator: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#FF4444" },
-  headerLive: { color: "#FF4444", fontFamily: fonts.bold, fontSize: 13, letterSpacing: 2 },
-  // Room info
-  roomInfo: { marginBottom: spacing.xl },
-  topicBadge: { alignSelf: "flex-start", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, marginBottom: spacing.sm },
-  topicText: { fontFamily: fonts.semibold, fontSize: 12 },
-  roomTitle: { color: colors.textPrimary, fontFamily: fonts.bold, fontSize: fonts.size.title },
-  roomDesc: { color: colors.textSecondary, fontFamily: fonts.regular, fontSize: fonts.size.md, marginTop: 4 },
-  // Sections
-  section: { marginBottom: spacing.xl },
-  sectionLabel: { color: colors.textSecondary, fontFamily: fonts.semibold, fontSize: fonts.size.sm, marginBottom: spacing.md },
-  // Speaker grid
-  speakerGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.lg },
-  speakerTile: { alignItems: "center", width: 90 },
-  speakerAvatarWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    borderWidth: 3,
-    borderColor: colors.outline,
-    overflow: "hidden",
-    marginBottom: 6,
-  },
-  speakerAvatarActive: { borderColor: colors.accentGreen },
-  speakerAvatarSpeaking: { borderColor: "#4CAF50", borderWidth: 4 },
-  speakerAvatarHost: { borderColor: colors.accentYellow },
-  audioBadge: { marginLeft: 4, width: 18, height: 18, borderRadius: 9, backgroundColor: colors.accentGreen + "30", alignItems: "center", justifyContent: "center" },
-  speakerAvatar: { width: 66, height: 66, borderRadius: 33 },
-  micBadge: {
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2,
-    borderColor: colors.surface,
-  },
-  micMuted: { backgroundColor: "#2a1a1a" },
-  micActive: { backgroundColor: colors.accentGreen },
-  speakerName: { color: colors.textPrimary, fontFamily: fonts.semibold, fontSize: fonts.size.xs, textAlign: "center" },
-  roleTag: { flexDirection: "row", alignItems: "center", gap: 2, marginTop: 2 },
-  roleText: { color: colors.textSecondary, fontFamily: fonts.regular, fontSize: 10 },
-  // Raised hands
-  handsList: { gap: spacing.sm },
-  handCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    backgroundColor: colors.accentYellow + "10",
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.accentYellow + "30",
-    padding: spacing.md,
-  },
-  handAvatar: { width: 32, height: 32, borderRadius: 16, overflow: "hidden" },
-  handName: { flex: 1, color: colors.textPrimary, fontFamily: fonts.semibold, fontSize: fonts.size.sm },
-  inviteBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: colors.accentYellow,
-    borderRadius: radii.pill,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  inviteBtnText: { color: colors.textDark, fontFamily: fonts.bold, fontSize: fonts.size.xs },
-  // Listener grid
-  listenerGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
-  listenerTile: { alignItems: "center", width: 64 },
-  listenerAvatarWrap: { width: 48, height: 48, borderRadius: 24, overflow: "hidden", marginBottom: 4 },
-  listenerAvatar: { width: 48, height: 48, borderRadius: 24 },
-  handBadge: { position: "absolute", top: -2, right: -2, width: 18, height: 18, borderRadius: 9, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
-  listenerName: { color: colors.textSecondary, fontFamily: fonts.regular, fontSize: 10, textAlign: "center" },
-  // Bottom controls
-  controls: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
+  header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: 36,
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.outline,
+    paddingVertical: spacing.md,
   },
-  leaveBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "#FF4444",
-    borderRadius: radii.pill,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  leaveBtnText: { color: "#fff", fontFamily: fonts.bold, fontSize: fonts.size.sm },
-  controlsRight: { flexDirection: "row", gap: spacing.md },
-  controlBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.outline,
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flex: 1 },
+  greenIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#228B6D",
     alignItems: "center",
     justifyContent: "center",
   },
-  controlBtnActive: { backgroundColor: colors.accentYellow + "30", borderColor: colors.accentYellow },
-  controlBtnMicActive: { backgroundColor: colors.accentGreen + "30", borderColor: colors.accentGreen },
+  headerTitleWrap: { flex: 1 },
+  roomTitleText: { color: "#fff", fontFamily: fonts.bold, fontSize: 16 },
+  roomSubtext: { color: "#888", fontFamily: fonts.regular, fontSize: 12, marginTop: 2 },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  iconBtn: { padding: 4 },
+  endBtn: {
+    backgroundColor: "#FF4444",
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  endBtnText: { color: "#fff", fontFamily: fonts.bold, fontSize: 13 },
+  // Grid
+  gridContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.xl, paddingBottom: 120 },
+  avatarGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-start", gap: spacing.lg },
+  gridItem: { alignItems: "center", width: "29%", marginBottom: spacing.lg },
+  avatarBorderWrap: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    borderWidth: 3,
+    borderColor: "#4A2E1C",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  activeSpeakerBorder: { borderColor: "#228B6D", borderWidth: 3 },
+  gridAvatar: { width: 76, height: 76, borderRadius: 38 },
+  gridName: { color: "#D0D0D0", fontFamily: fonts.semibold, fontSize: 13, textAlign: "center" },
+  gridNameActive: { color: "#228B6D", fontFamily: fonts.bold },
+  // Floating Bottom Bar
+  floatingBarWrap: {
+    position: "absolute",
+    bottom: 24,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+  floatingBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+    backgroundColor: "#1c1d21",
+    borderRadius: 28,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    width: "88%",
+    shadowColor: "#000",
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  barIconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#282a30",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  barIconBtnActive: { backgroundColor: "#1d382e" },
+  // Modal
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.75)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing.xl,
+  },
+  modalCard: {
+    width: "100%",
+    backgroundColor: "#25262a",
+    borderRadius: radii.xl,
+    padding: spacing.xl,
+    alignItems: "center",
+  },
+  modalTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 20, marginBottom: 8, textAlign: "center" },
+  modalSubtitle: { color: "#aaa", fontFamily: fonts.regular, fontSize: 14, textAlign: "center", lineHeight: 20, marginBottom: spacing.xl },
+  modalEndBtn: {
+    width: "100%",
+    backgroundColor: "#FF4444",
+    borderRadius: radii.md,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.md,
+  },
+  modalEndBtnText: { color: "#fff", fontFamily: fonts.bold, fontSize: 15 },
+  modalCancelBtn: {
+    width: "100%",
+    backgroundColor: "#35373d",
+    borderRadius: radii.md,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalCancelBtnText: { color: "#fff", fontFamily: fonts.bold, fontSize: 15 },
 });

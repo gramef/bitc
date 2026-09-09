@@ -1,200 +1,293 @@
 import SafeScreen from "@/components/SafeScreen";
+import { BriefAnalysisResult, interpretBrief } from "@/services/ai";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-    ActivityIndicator,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 
-type ParsedSection = { title: string; items: string[] };
-
-function parseBrief(text: string): ParsedSection[] {
-    const sections: ParsedSection[] = [];
-    const lines = text.split(/[.\n]/).map((l) => l.trim()).filter(Boolean);
-
-    const goals: string[] = [];
-    const deliverables: string[] = [];
-    const timeline: string[] = [];
-    const redFlags: string[] = [];
-    const requirements: string[] = [];
-
-    for (const line of lines) {
-        const lower = line.toLowerCase();
-        if (lower.includes("deadline") || lower.includes("week") || lower.includes("month") || lower.includes("day") || lower.includes("timeline") || lower.includes("asap") || lower.includes("urgent")) {
-            timeline.push(line);
-        } else if (lower.includes("goal") || lower.includes("objective") || lower.includes("aim") || lower.includes("want") || lower.includes("need") || lower.includes("looking for")) {
-            goals.push(line);
-        } else if (lower.includes("deliver") || lower.includes("output") || lower.includes("provide") || lower.includes("create") || lower.includes("design") || lower.includes("build") || lower.includes("develop")) {
-            deliverables.push(line);
-        } else if (lower.includes("budget") || lower.includes("free") || lower.includes("cheap") || lower.includes("unlimited revision") || lower.includes("no pay") || lower.includes("exposure")) {
-            redFlags.push(`⚠️ ${line}`);
-        } else {
-            requirements.push(line);
-        }
-    }
-
-    if (goals.length > 0) sections.push({ title: "🎯 Goals & Objectives", items: goals });
-    if (requirements.length > 0) sections.push({ title: "📋 Requirements", items: requirements });
-    if (deliverables.length > 0) sections.push({ title: "📦 Deliverables", items: deliverables });
-    if (timeline.length > 0) sections.push({ title: "⏰ Timeline Indicators", items: timeline });
-    if (redFlags.length > 0) sections.push({ title: "🚩 Red Flags", items: redFlags });
-
-    if (sections.length === 0) {
-        sections.push({ title: "📋 Key Points", items: lines.slice(0, 10) });
-    }
-
-    return sections;
-}
-
-function generateQuestions(text: string, sections: ParsedSection[]): string[] {
-    const lower = text.toLowerCase();
-    const questions: string[] = [];
-    const sectionTitles = sections.map((s) => s.title);
-
-    if (!sectionTitles.some((t) => t.includes("Timeline"))) {
-        questions.push("What is the deadline for this project? Are there any intermediate milestones?");
-    }
-    if (!lower.includes("budget") && !lower.includes("pay") && !lower.includes("cost")) {
-        questions.push("What is the budget range for this project?");
-    }
-    if (!lower.includes("revision") && !lower.includes("feedback")) {
-        questions.push("How many rounds of revisions are included?");
-    }
-    if (!lower.includes("format") && !lower.includes("file")) {
-        questions.push("What file formats do you need the deliverables in?");
-    }
-    if (!lower.includes("brand") && !lower.includes("style") && !lower.includes("guideline")) {
-        questions.push("Do you have existing brand guidelines or style preferences?");
-    }
-    if (!lower.includes("audience") && !lower.includes("target")) {
-        questions.push("Who is the target audience for this project?");
-    }
-    if (sectionTitles.some((t) => t.includes("Red Flags"))) {
-        questions.push("Can we clarify the scope boundaries to avoid scope creep?");
-    }
-    if (questions.length === 0) {
-        questions.push("Are there any reference examples or inspiration you'd like to share?");
-        questions.push("What does success look like for this project?");
-    }
-    return questions.slice(0, 5);
-}
+const SAMPLE_BRIEFS = [
+  {
+    label: "Mobile App MVP",
+    text: "We are an early-stage fintech startup looking to design an MVP iOS app. We need 12-15 screens including onboarding, KYC verification, wallet dashboard, and P2P transfers. Launch deadline is in 4 weeks. No brand guidelines exist yet, but we like the Clean Minimal look of Revolut.",
+  },
+  {
+    label: "Brand Identity",
+    text: "Rebranding our boutique coffee roasting business. We need a primary logo, secondary badge, coffee bag packaging die-lines, brand color palette, and social media templates. Looking for 3 concepts and unlimited revisions. Budget is tight ($800) but this will lead to long-term work.",
+  },
+  {
+    label: "SaaS Landing Page",
+    text: "Need a high-converting web landing page in Figma for our B2B AI analytics tool. Key deliverables: Hero section, interactive product demo layout, feature matrix, pricing table, customer testimonials, and mobile responsive variants. Target completion is 2 weeks.",
+  },
+];
 
 export default function BriefInterpreter() {
-    const router = useRouter();
-    const [briefText, setBriefText] = useState("");
-    const [result, setResult] = useState<ParsedSection[] | null>(null);
-    const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const [briefText, setBriefText] = useState("");
+  const [result, setResult] = useState<BriefAnalysisResult | null>(null);
+  const [loading, setLoading] = useState(false);
 
-    function handleInterpret() {
-        if (!briefText.trim()) return;
-        setLoading(true);
-        // Simulate processing delay
-        setTimeout(() => {
-            setResult(parseBrief(briefText));
-            setLoading(false);
-        }, 800);
+  async function handleInterpret() {
+    if (!briefText.trim()) return;
+    setLoading(true);
+    try {
+      const res = await interpretBrief(briefText);
+      setResult(res);
+    } catch {
+      Alert.alert("Analysis Error", "Unable to interpret brief right now. Please try again.");
+    } finally {
+      setLoading(false);
     }
+  }
 
-    return (
-        <SafeScreen>
-            <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-                <Pressable style={styles.backBtn} onPress={() => router.back()} hitSlop={10}>
-                    <MaterialIcons name="arrow-back" size={24} color={colors.textPrimary} />
-                </Pressable>
-                <Text style={styles.title}>Brief Interpreter</Text>
-                <Text style={styles.subtitle}>
-                    Paste a client brief and get an instant breakdown of requirements, goals, deliverables, and potential red flags.
-                </Text>
-
-                <Text style={styles.label}>Paste Brief</Text>
-                <TextInput
-                    style={styles.textArea}
-                    placeholder="Paste your client brief here…"
-                    placeholderTextColor={colors.textSecondary}
-                    value={briefText}
-                    onChangeText={setBriefText}
-                    multiline
-                    textAlignVertical="top"
-                />
-
-                <Pressable style={[styles.interpretBtn, !briefText.trim() && { opacity: 0.5 }]} onPress={handleInterpret} disabled={!briefText.trim() || loading}>
-                    {loading ? (
-                        <ActivityIndicator color={colors.textDark} />
-                    ) : (
-                        <Text style={styles.interpretBtnText}>Interpret Brief</Text>
-                    )}
-                </Pressable>
-
-                {result ? (
-                    <View style={styles.resultCard}>
-                        <Text style={styles.resultTitle}>Analysis</Text>
-                        {result.map((section, idx) => (
-                            <View key={idx} style={styles.section}>
-                                <Text style={styles.sectionTitle}>{section.title}</Text>
-                                {section.items.map((item, i) => (
-                                    <View key={i} style={styles.bulletRow}>
-                                        <Text style={styles.bullet}>•</Text>
-                                        <Text style={styles.bulletText}>{item}</Text>
-                                    </View>
-                                ))}
-                            </View>
-                        ))}
-
-                        {/* Suggested Questions */}
-                        <View style={styles.questionsSection}>
-                            <Text style={styles.questionsTitle}>💬 Suggested Questions to Ask</Text>
-                            {generateQuestions(briefText, result).map((q, i) => (
-                                <View key={i} style={styles.questionRow}>
-                                    <Text style={styles.questionNum}>{i + 1}.</Text>
-                                    <Text style={styles.questionText}>{q}</Text>
-                                </View>
-                            ))}
-                        </View>
-                    </View>
-                ) : null}
-            </ScrollView>
-        </SafeScreen>
+  async function handleCopyQuestions() {
+    if (!result) return;
+    const text = result.clarifyingQuestions
+      .map((q, i) => `${i + 1}. ${q}`)
+      .join("\n\n");
+    await Clipboard.setStringAsync(text);
+    Alert.alert(
+      "Questions Copied!",
+      "5 strategic scoping questions have been copied to your clipboard. Paste them into your client email or chat."
     );
+  }
+
+  return (
+    <SafeScreen>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <Pressable style={styles.backBtn} onPress={() => router.back()} hitSlop={10}>
+          <MaterialIcons name="arrow-back" size={24} color={colors.textPrimary} />
+        </Pressable>
+        <Text style={styles.title}>AI Brief Interpreter</Text>
+        <Text style={styles.subtitle}>
+          Paste any messy client brief to instantly extract project deliverables, timeline flags, pricing brackets, and defensive scope questions.
+        </Text>
+
+        <Text style={styles.quickFillLabel}>Quick Test with Sample Briefs:</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.samplesScroll}>
+          <View style={styles.samplesRow}>
+            {SAMPLE_BRIEFS.map((s, idx) => (
+              <Pressable
+                key={idx}
+                style={styles.sampleChip}
+                onPress={() => setBriefText(s.text)}
+                hitSlop={6}
+              >
+                <MaterialIcons name="auto-awesome" size={14} color={colors.accentYellow} />
+                <Text style={styles.sampleChipText}>{s.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </ScrollView>
+
+        <Text style={styles.label}>Paste Client Brief</Text>
+        <TextInput
+          style={styles.textArea}
+          placeholder="Paste client email, Slack message, or Upwork job description here…"
+          placeholderTextColor={colors.textSecondary}
+          value={briefText}
+          onChangeText={setBriefText}
+          multiline
+          textAlignVertical="top"
+        />
+
+        <Pressable
+          style={[styles.interpretBtn, (!briefText.trim() || loading) && { opacity: 0.6 }]}
+          onPress={handleInterpret}
+          disabled={!briefText.trim() || loading}
+        >
+          {loading ? (
+            <ActivityIndicator color={colors.textDark} />
+          ) : (
+            <View style={styles.btnRow}>
+              <MaterialIcons name="psychology" size={20} color={colors.textDark} />
+              <Text style={styles.interpretBtnText}>Analyze Scope & Red Flags</Text>
+            </View>
+          )}
+        </Pressable>
+
+        {result ? (
+          <View style={styles.resultCard}>
+            <View style={styles.resultHeader}>
+              <View style={styles.badgeRow}>
+                <View style={styles.badgeGreen}>
+                  <Text style={styles.badgeTextGreen}>{result.projectType}</Text>
+                </View>
+                <View style={styles.badgeDark}>
+                  <Text style={styles.badgeTextDark}>{result.clientMaturity}</Text>
+                </View>
+              </View>
+              <Text style={styles.resultSummary}>{result.executiveSummary}</Text>
+            </View>
+
+            {/* Scope & Pricing Metrics */}
+            <View style={styles.metricGrid}>
+              <View style={styles.metricBox}>
+                <Text style={styles.metricLabel}>Estimated Effort</Text>
+                <Text style={styles.metricValue}>{result.estimatedEffort}</Text>
+              </View>
+              <View style={styles.metricBox}>
+                <Text style={styles.metricLabel}>Fair Pricing Tier</Text>
+                <Text style={styles.metricValueHighlight}>{result.recommendedPricingTier}</Text>
+              </View>
+            </View>
+
+            {/* Deliverables */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>📦 Core Deliverables</Text>
+              {result.deliverables.map((item, i) => (
+                <View key={i} style={styles.bulletRow}>
+                  <MaterialIcons name="check" size={16} color={colors.accentGreen} style={{ marginTop: 2 }} />
+                  <Text style={styles.bulletText}>{item}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Red Flags & Risk Warnings */}
+            {result.redFlags.length > 0 && (
+              <View style={styles.riskCard}>
+                <View style={styles.riskHeader}>
+                  <MaterialIcons name="warning" size={18} color="#ff6b6b" />
+                  <Text style={styles.riskTitle}>Identified Scope Risks & Red Flags</Text>
+                </View>
+                {result.redFlags.map((rf, i) => (
+                  <View key={i} style={styles.riskItem}>
+                    <Text style={styles.riskName}>⚠️ {rf.risk}</Text>
+                    <Text style={styles.riskAdvice}>Recommendation: {rf.advice}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Suggested Questions to Ask */}
+            <View style={styles.questionsSection}>
+              <View style={styles.questionsHeaderRow}>
+                <Text style={styles.questionsTitle}>💬 Clarifying Questions to Ask</Text>
+                <Pressable onPress={handleCopyQuestions} style={styles.copyBtn} hitSlop={6}>
+                  <MaterialIcons name="content-copy" size={16} color={colors.accentYellow} />
+                  <Text style={styles.copyBtnText}>Copy All</Text>
+                </Pressable>
+              </View>
+              {result.clarifyingQuestions.map((q, i) => (
+                <View key={i} style={styles.questionRow}>
+                  <Text style={styles.questionNum}>{i + 1}.</Text>
+                  <Text style={styles.questionText}>{q}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+      </ScrollView>
+    </SafeScreen>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
-    content: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.xl, gap: spacing.md },
-    backBtn: { alignSelf: "flex-start", paddingVertical: spacing.sm },
-    title: { color: colors.textPrimary, fontFamily: fonts.bold, fontSize: fonts.size.title },
-    subtitle: { color: colors.textSecondary, fontFamily: fonts.regular, fontSize: fonts.size.md, lineHeight: 22 },
-    label: { color: colors.textPrimary, fontFamily: fonts.semibold, fontSize: fonts.size.md, marginTop: spacing.md },
-    textArea: {
-        backgroundColor: colors.surface,
-        borderRadius: radii.card,
-        borderWidth: 1,
-        borderColor: colors.outline,
-        padding: spacing.md,
-        color: colors.textPrimary,
-        fontFamily: fonts.regular,
-        fontSize: fonts.size.md,
-        minHeight: 160,
-        lineHeight: 22,
-    },
-    interpretBtn: { backgroundColor: colors.accentGreen, borderRadius: radii.pill, paddingVertical: 14, alignItems: "center", marginTop: spacing.md },
-    interpretBtnText: { color: colors.textDark, fontFamily: fonts.bold, fontSize: fonts.size.md },
-    resultCard: { backgroundColor: colors.surface, borderRadius: radii.card, borderWidth: 1, borderColor: colors.outline, padding: spacing.lg },
-    resultTitle: { color: colors.textPrimary, fontFamily: fonts.bold, fontSize: fonts.size.lg, marginBottom: spacing.md },
-    section: { marginBottom: spacing.lg },
-    sectionTitle: { color: colors.textPrimary, fontFamily: fonts.semibold, fontSize: fonts.size.md, marginBottom: spacing.sm },
-    bulletRow: { flexDirection: "row", gap: spacing.sm, marginBottom: 6 },
-    bullet: { color: colors.accentYellow, fontFamily: fonts.bold, fontSize: fonts.size.md },
-    bulletText: { flex: 1, color: colors.textSecondary, fontFamily: fonts.regular, fontSize: fonts.size.md, lineHeight: 20 },
-    questionsSection: { marginTop: spacing.lg, paddingTop: spacing.lg, borderTopWidth: 1, borderTopColor: colors.outline },
-    questionsTitle: { color: colors.textPrimary, fontFamily: fonts.bold, fontSize: fonts.size.lg, marginBottom: spacing.md },
-    questionRow: { flexDirection: "row" as const, gap: spacing.sm, marginBottom: spacing.sm },
-    questionNum: { color: colors.accentGreen, fontFamily: fonts.bold, fontSize: fonts.size.md, width: 20 },
-    questionText: { flex: 1, color: colors.textSecondary, fontFamily: fonts.regular, fontSize: fonts.size.md, lineHeight: 22 },
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.xl, gap: spacing.md },
+  backBtn: { alignSelf: "flex-start", paddingVertical: spacing.sm },
+  title: { color: colors.accentYellow, fontFamily: fonts.bold, fontSize: fonts.size.title },
+  subtitle: { color: colors.textSecondary, fontFamily: fonts.regular, fontSize: fonts.size.md, lineHeight: 22 },
+  quickFillLabel: { color: colors.textSecondary, fontFamily: fonts.semibold, fontSize: fonts.size.sm, marginTop: spacing.sm },
+  samplesScroll: { marginHorizontal: -spacing.lg, paddingHorizontal: spacing.lg },
+  samplesRow: { flexDirection: "row", gap: spacing.sm, paddingVertical: spacing.xs },
+  sampleChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.outline,
+  },
+  sampleChipText: { color: colors.textPrimary, fontFamily: fonts.semibold, fontSize: fonts.size.xs },
+  label: { color: colors.textPrimary, fontFamily: fonts.semibold, fontSize: fonts.size.md, marginTop: spacing.sm },
+  textArea: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.card,
+    borderWidth: 1,
+    borderColor: colors.outline,
+    padding: spacing.md,
+    color: colors.textPrimary,
+    fontFamily: fonts.regular,
+    fontSize: fonts.size.md,
+    minHeight: 140,
+    lineHeight: 22,
+  },
+  interpretBtn: {
+    backgroundColor: colors.accentGreen,
+    borderRadius: radii.pill,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: spacing.xs,
+  },
+  btnRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  interpretBtnText: { color: colors.textDark, fontFamily: fonts.bold, fontSize: fonts.size.md },
+  resultCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.card,
+    borderWidth: 1,
+    borderColor: colors.outline,
+    padding: spacing.lg,
+    gap: spacing.lg,
+    marginTop: spacing.md,
+  },
+  resultHeader: { gap: spacing.sm },
+  badgeRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
+  badgeGreen: { backgroundColor: colors.accentGreen, borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 4 },
+  badgeTextGreen: { color: colors.textDark, fontFamily: fonts.bold, fontSize: fonts.size.xs },
+  badgeDark: { backgroundColor: "#2b2b2b", borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 4 },
+  badgeTextDark: { color: colors.textPrimary, fontFamily: fonts.semibold, fontSize: fonts.size.xs },
+  resultSummary: { color: colors.textSecondary, fontFamily: fonts.regular, fontSize: fonts.size.md, lineHeight: 22 },
+  metricGrid: { flexDirection: "row", gap: spacing.md },
+  metricBox: {
+    flex: 1,
+    backgroundColor: "#161616",
+    borderRadius: radii.md,
+    padding: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.outline,
+  },
+  metricLabel: { color: colors.textSecondary, fontFamily: fonts.regular, fontSize: fonts.size.xs },
+  metricValue: { color: colors.textPrimary, fontFamily: fonts.semibold, fontSize: fonts.size.sm, marginTop: 4 },
+  metricValueHighlight: { color: colors.accentYellow, fontFamily: fonts.bold, fontSize: fonts.size.sm, marginTop: 4 },
+  section: { gap: spacing.sm },
+  sectionTitle: { color: colors.textPrimary, fontFamily: fonts.bold, fontSize: fonts.size.md },
+  bulletRow: { flexDirection: "row", gap: spacing.sm },
+  bulletText: { flex: 1, color: colors.textSecondary, fontFamily: fonts.regular, fontSize: fonts.size.sm, lineHeight: 20 },
+  riskCard: {
+    backgroundColor: "#2a1717",
+    borderRadius: radii.card,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: "#6b2c2c",
+    gap: spacing.sm,
+  },
+  riskHeader: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  riskTitle: { color: "#ff8585", fontFamily: fonts.bold, fontSize: fonts.size.sm },
+  riskItem: { borderTopWidth: 1, borderTopColor: "#472020", paddingTop: 6, gap: 2 },
+  riskName: { color: colors.textPrimary, fontFamily: fonts.semibold, fontSize: fonts.size.sm },
+  riskAdvice: { color: "#ffbaba", fontFamily: fonts.regular, fontSize: fonts.size.xs, lineHeight: 18 },
+  questionsSection: { gap: spacing.sm },
+  questionsHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  questionsTitle: { color: colors.textPrimary, fontFamily: fonts.bold, fontSize: fonts.size.md },
+  copyBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#1e1e1e", paddingHorizontal: 10, paddingVertical: 6, borderRadius: radii.pill },
+  copyBtnText: { color: colors.accentYellow, fontFamily: fonts.bold, fontSize: fonts.size.xs },
+  questionRow: { flexDirection: "row", gap: spacing.sm },
+  questionNum: { color: colors.accentGreen, fontFamily: fonts.bold, fontSize: fonts.size.md, width: 20 },
+  questionText: { flex: 1, color: colors.textSecondary, fontFamily: fonts.regular, fontSize: fonts.size.sm, lineHeight: 22 },
 });
+

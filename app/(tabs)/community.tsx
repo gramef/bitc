@@ -222,7 +222,11 @@ export default function Community() {
         ) : (
           posts.map((post) => (
             <View key={post.id} style={styles.postCard}>
-              <View style={styles.postHeader}>
+              <Pressable
+                style={styles.postHeader}
+                onPress={() => router.push(`/user/${post.userId}` as any)}
+                hitSlop={6}
+              >
                 <View style={styles.postAvatarWrap}>
                   <Image
                     source={post.avatarUrl ? { uri: post.avatarUrl } : require("../../assets/images/react-logo.png")}
@@ -235,7 +239,7 @@ export default function Community() {
                   <Text style={styles.postRole}>{post.role}</Text>
                 </View>
                 <Text style={styles.postTime}>{post.time}</Text>
-              </View>
+              </Pressable>
               <Text style={styles.postText}>{post.text}</Text>
               <View style={styles.postActions}>
                 <Pressable style={styles.actionBtn} onPress={() => handleLike(post.id, post.likedByMe)}>

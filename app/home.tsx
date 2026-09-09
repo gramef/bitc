@@ -71,6 +71,7 @@ export default function Home() {
   }
 
   const quickActions = [
+    { label: "Rooms", icon: "mic" as const, route: "/rooms", gradient: ["#FF4444", "#ff7675"] as const },
     { label: "Events", icon: "event" as const, route: "/(tabs)/events", gradient: ["#6C5CE7", "#a29bfe"] as const },
     { label: "Jobs", icon: "work" as const, route: "/(tabs)/jobs", gradient: ["#00B894", "#55efc4"] as const },
     { label: "Skills", icon: "school" as const, route: "/(tabs)/skills", gradient: ["#E17055", "#fab1a0"] as const },
@@ -122,7 +123,7 @@ export default function Home() {
 
         {/* ── Quick Actions ── */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <View style={styles.actionsRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.actionsScroll}>
           {quickActions.map((a) => (
             <Pressable
               key={a.label}
@@ -140,7 +141,7 @@ export default function Home() {
               <Text style={styles.actionLabel}>{a.label}</Text>
             </Pressable>
           ))}
-        </View>
+        </ScrollView>
 
         {/* ── Upcoming Events ── */}
         <View style={styles.sectionHeader}>
@@ -302,17 +303,17 @@ const styles = StyleSheet.create({
   seeAll: { color: colors.accentYellow, fontFamily: fonts.semibold, fontSize: fonts.size.sm },
 
   /* ── Quick Actions ── */
-  actionsRow: { flexDirection: "row", gap: 10, justifyContent: "space-between" },
+  actionsScroll: { flexDirection: "row", gap: 10, paddingRight: spacing.lg },
   actionCard: {
-    flex: 1,
+    width: 78,
     backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.outline,
-    paddingVertical: 14,
-    paddingHorizontal: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
     alignItems: "center",
-    gap: 8,
+    gap: 6,
   },
   actionGradient: {
     width: 40,

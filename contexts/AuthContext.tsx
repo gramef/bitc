@@ -117,11 +117,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, fetchProfile]);
 
   const signOut = useCallback(async () => {
-    const sb = getSupabase();
-    if (sb) await sb.auth.signOut();
-    setUser(null);
-    setSession(null);
-    setProfile(null);
+    try {
+      const sb = getSupabase();
+      if (sb) {
+        await sb.auth.signOut();
+      }
+    } catch (e) {
+      console.warn("Error during Supabase signOut:", e);
+    } finally {
+      setUser(null);
+      setSession(null);
+      setProfile(null);
+    }
   }, []);
 
   const hasRole = useCallback(

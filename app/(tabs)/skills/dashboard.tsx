@@ -1,21 +1,14 @@
 import SafeScreen from "@/components/SafeScreen";
 import { useAuth } from "@/contexts/AuthContext";
+import { Course, fetchCourses, fetchLearningStats } from "@/services/courses";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
-import React, { useMemo } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 type Stat = { label: string; value: string; suffix?: string };
-type Course = {
-  id: string;
-  title: string;
-  lessons: number;
-  duration: string;
-  progress: number;
-  image: any;
-};
 
 export default function SkillsDashboard() {
   const router = useRouter();
@@ -25,36 +18,37 @@ export default function SkillsDashboard() {
     ? { uri: profile.avatarUrl }
     : require("../../../assets/images/react-logo.png");
 
-  const stats: Stat[] = useMemo(
-    () => [
-      { label: "Learning Streak", value: "134", suffix: "Days" },
-      { label: "Courses Completed", value: "23" },
-      { label: "Ai Tools Used This Week", value: "4" },
-    ],
-    []
+  const [stats, setStats] = useState<Stat[]>([
+    { label: "Learning Streak", value: "14", suffix: "Days" },
+    { label: "Courses Completed", value: "2" },
+    { label: "Ai Tools Used This Week", value: "4" },
+  ]);
+  const [courses, setCourses] = useState<Course[]>([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchCourses().then((data) => {
+        setCourses(data);
+      });
+
+      fetchLearningStats().then((ls) => {
+        setStats([
+          { label: "Learning Streak", value: String(ls.learningStreakDays), suffix: "Days" },
+          { label: "Courses Completed", value: String(ls.coursesCompletedCount) },
+          { label: "Ai Tools Used This Week", value: String(ls.aiToolsUsedThisWeek) },
+        ]);
+      });
+    }, [])
   );
-  const courses: Course[] = useMemo(
-    () => [
-      {
-        id: "c1",
-        title: "Mastering Logo Variations",
-        lessons: 17,
-        duration: "1-2 Hours",
-        progress: 89,
-        image: require("../../../images/image 2.png"),
-      },
-      {
-        id: "c2",
-        title: "UI/UX Design Essentials",
-        lessons: 24,
-        duration: "2-3 Hours",
-        progress: 42,
-        image: require("../../../images/image 1.png"),
-      },
-    ],
-    []
-  );
-  const tools = useMemo(() => ["Midjourney", "Runway", "Figma AI", "ChatGPT", "Stable Diffusion"], []);
+
+  const tools = [
+    { name: "Portfolio Review", route: "/skills/tools/portfolio-review" },
+    { name: "Brief Interpreter", route: "/brief-interpreter" },
+    { name: "Rate Calculator", route: "/rate-calculator" },
+    { name: "Figma AI", route: "/skills/tools" },
+    { name: "Midjourney Prompts", route: "/skills/tools" },
+  ];
+
   return (
     <SafeScreen>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -91,7 +85,6 @@ export default function SkillsDashboard() {
             <View key={idx} style={[styles.statCard, idx === 0 ? styles.statCardHighlight : null]}>
               <Text style={[styles.statValue, idx === 0 ? styles.statValueDark : null]}>
                 {s.value}
-                {s.suffix ? "" : ""}
               </Text>
               <Text style={[styles.statLabel, idx === 0 ? styles.statLabelDark : null]}>
                 {s.label + (s.suffix ? `\n${s.suffix}` : "")}
@@ -102,44 +95,58 @@ export default function SkillsDashboard() {
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Progress Status</Text>
-          <Pressable hitSlop={6}>
+          <Pressable hitSlop={6} onPress={() => router.push("/skills/learn" as any)}>
             <Text style={styles.sectionLink}>See all</Text>
           </Pressable>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.cardRow}>
             {courses.map((c) => (
-              <View key={c.id} style={styles.courseCard}>
+              <Pressable
+                key={c.id}
+                style={styles.courseCard}
+                onPress={() => router.push(`/course/${c.id}`)}
+                hitSlop={6}
+              >
                 <Image source={c.image} style={styles.courseImage} contentFit="cover" />
                 <View style={styles.courseBody}>
                   <Text style={styles.courseTitle}>{c.title}</Text>
                   <View style={styles.courseMetaRow}>
                     <MaterialIcons name="view-module" size={16} color={colors.textMuted} />
-                    <Text style={styles.courseMetaText}>{c.lessons} Lessons</Text>
+                    <Text style={styles.courseMetaText}>{c.lessonsCount} Lessons</Text>
                     <MaterialIcons name="schedule" size={16} color={colors.textMuted} style={{ marginLeft: spacing.md }} />
                     <Text style={styles.courseMetaText}>{c.duration}</Text>
                   </View>
-                  <Text style={styles.progressLabel}>Progress</Text>
+                  <View style={styles.progressLabelRow}>
+                    <Text style={styles.progressLabel}>Progress</Text>
+                    <Text style={styles.progressVal}>{c.progressPercent}%</Text>
+                  </View>
                   <View style={styles.progressTrack}>
-                    <View style={[styles.progressFill, { width: `${c.progress}%` }]} />
+                    <View style={[styles.progressFill, { width: `${c.progressPercent}%` }]} />
                   </View>
                 </View>
-              </View>
+              </Pressable>
             ))}
           </View>
         </ScrollView>
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Quick Launch - Ai Tools</Text>
-          <Pressable hitSlop={6}>
+          <Pressable hitSlop={6} onPress={() => router.push("/skills/tools" as any)}>
             <Text style={styles.sectionLink}>View all</Text>
           </Pressable>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.toolsRow}>
-            {tools.map((t) => (
-              <Pressable key={t} style={styles.toolChip} hitSlop={6}>
-                <Text style={styles.toolChipText}>{t}</Text>
+            {tools.map((t, idx) => (
+              <Pressable
+                key={idx}
+                style={styles.toolChip}
+                hitSlop={6}
+                onPress={() => router.push(t.route as any)}
+              >
+                <MaterialIcons name="auto-awesome" size={14} color={colors.accentYellow} style={{ marginRight: 6 }} />
+                <Text style={styles.toolChipText}>{t.name}</Text>
               </Pressable>
             ))}
           </View>
@@ -210,7 +217,9 @@ const styles = StyleSheet.create({
   courseTitle: { color: colors.textPrimary, fontFamily: fonts.semibold, fontSize: fonts.size.md },
   courseMetaRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   courseMetaText: { color: colors.textSecondary, fontFamily: fonts.regular, fontSize: fonts.size.sm },
-  progressLabel: { color: colors.textSecondary, fontFamily: fonts.regular, fontSize: fonts.size.sm, marginTop: 2 },
+  progressLabelRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 2 },
+  progressLabel: { color: colors.textSecondary, fontFamily: fonts.regular, fontSize: fonts.size.sm },
+  progressVal: { color: colors.accentYellow, fontFamily: fonts.semibold, fontSize: fonts.size.sm },
   progressTrack: {
     height: 6,
     borderRadius: 3,

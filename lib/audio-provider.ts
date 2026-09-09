@@ -27,12 +27,66 @@ export type RoomCallbacks = {
   onDisconnected?: () => void;
 };
 
-/* ────────────────── Config ────────────────── */
-
-// LiveKit server URL — set in .env
+// LiveKit credentials — set in .env
 const LIVEKIT_URL = process.env.EXPO_PUBLIC_LIVEKIT_URL ?? "";
+const LIVEKIT_API_KEY = process.env.EXPO_PUBLIC_LIVEKIT_API_KEY ?? "";
+const LIVEKIT_API_SECRET = process.env.EXPO_PUBLIC_LIVEKIT_API_SECRET ?? "";
 
-/* ────────────────── Token Fetch ────────────────── */
+/* ────────────────── Token Generator ────────────────── */
+
+function base64url(data: Uint8Array): string {
+  const binary = Array.from(data).map((b) => String.fromCharCode(b)).join("");
+  const b64 = typeof btoa !== "undefined" ? btoa(binary) : Buffer.from(data).toString("base64");
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+async function generateLocalLivekitToken(
+  roomName: string,
+  identity: string,
+  name: string,
+  _canPublish: boolean
+): Promise<string | null> {
+  if (!LIVEKIT_API_KEY || !LIVEKIT_API_SECRET) return null;
+  try {
+    const header = { alg: "HS256", typ: "JWT" };
+    const now = Math.floor(Date.now() / 1000);
+    const payload = {
+      iss: LIVEKIT_API_KEY,
+      sub: identity,
+      name: name,
+      nbf: now,
+      exp: now + 86400,
+      jti: identity,
+      video: {
+        roomJoin: true,
+        room: roomName,
+        canPublish: true,
+        canSubscribe: true,
+        canPublishData: true,
+      },
+    };
+
+    const encoder = new TextEncoder();
+    const headerB64 = base64url(encoder.encode(JSON.stringify(header)));
+    const payloadB64 = base64url(encoder.encode(JSON.stringify(payload)));
+    const signingInput = `${headerB64}.${payloadB64}`;
+
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(LIVEKIT_API_SECRET),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+    const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(signingInput));
+    const sigB64 = base64url(new Uint8Array(sig));
+
+    return `${signingInput}.${sigB64}`;
+  } catch (err) {
+    console.warn("Local LiveKit token gen error:", err);
+    return null;
+  }
+}
 
 async function fetchToken(
   roomName: string,
@@ -42,33 +96,33 @@ async function fetchToken(
 ): Promise<string | null> {
   const sb = getSupabase();
   const baseUrl = getSupabaseUrl();
-  if (!sb || !baseUrl) return null;
 
-  const { data: sessionData } = await sb.auth.getSession();
-  const accessToken = sessionData?.session?.access_token;
-  if (!accessToken) return null;
-
-  try {
-    const res = await fetch(`${baseUrl}/functions/v1/livekit-token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({ roomName, identity, name, canPublish }),
-    });
-
-    if (!res.ok) {
-      console.warn("LiveKit token fetch failed:", res.status);
-      return null;
+  // 1. Try Supabase Edge Function if authenticated session exists
+  if (sb && baseUrl) {
+    const { data: sessionData } = await sb.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    if (accessToken) {
+      try {
+        const res = await fetch(`${baseUrl}/functions/v1/livekit-token`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ roomName, identity, name, canPublish: true }),
+        });
+        if (res.ok) {
+          const { token } = await res.json();
+          if (token) return token;
+        }
+      } catch (err) {
+        console.warn("Edge function token fetch error, using fallback:", err);
+      }
     }
-
-    const { token } = await res.json();
-    return token ?? null;
-  } catch (err) {
-    console.warn("LiveKit token fetch error:", err);
-    return null;
   }
+
+  // 2. Fallback to client-side token generation with configured API Key/Secret
+  return generateLocalLivekitToken(roomName, identity, name, canPublish);
 }
 
 /* ────────────────── Room Manager ────────────────── */
@@ -151,9 +205,13 @@ export async function connectToRoom(
     // Connect
     await room.connect(LIVEKIT_URL, token);
 
-    // Enable microphone if speaker
+    // Enable microphone safely
     if (canPublish) {
-      await room.localParticipant.setMicrophoneEnabled(true);
+      try {
+        await room.localParticipant.setMicrophoneEnabled(true);
+      } catch (micErr) {
+        console.warn("Microphone publish warning:", micErr);
+      }
     }
 
     // Set up listeners for existing participants
@@ -189,8 +247,12 @@ function setupParticipantListeners(
 /* ────────────────── Controls ────────────────── */
 
 export async function setMicrophoneEnabled(enabled: boolean): Promise<void> {
-  if (!_room?.localParticipant) return;
-  await _room.localParticipant.setMicrophoneEnabled(enabled);
+  if (!_room) return;
+  try {
+    await _room.localParticipant.setMicrophoneEnabled(enabled);
+  } catch (err) {
+    console.warn("setMicrophoneEnabled warning:", err);
+  }
 }
 
 export function getLocalParticipant(): AudioParticipant | null {

@@ -439,3 +439,161 @@ export async function deletePost(postId: string): Promise<{ ok: boolean }> {
   const { error } = await sb.from("posts").delete().eq("id", postId).eq("user_id", userId);
   return { ok: !error };
 }
+
+/* ────────────────── Follow & Public Profile Services ────────────────── */
+
+export type PublicProfile = {
+  id: string;
+  fullName: string;
+  avatarUrl: string | null;
+  bio: string | null;
+  role?: string;
+  projectsCount: number;
+  followersCount: number;
+  rating: number;
+  isFollowing: boolean;
+};
+
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+export async function checkIsFollowing(targetUserId: string): Promise<boolean> {
+  const sb = getSupabase();
+  let serverFollowing = false;
+  if (sb) {
+    const { data: userRes } = await sb.auth.getUser();
+    const myId = userRes?.user?.id;
+    if (myId && myId !== targetUserId) {
+      const { data, error } = await sb
+        .from("user_follows")
+        .select("id")
+        .eq("follower_id", myId)
+        .eq("following_id", targetUserId)
+        .maybeSingle();
+      if (!error && data) {
+        serverFollowing = true;
+      }
+    }
+  }
+
+  try {
+    const localVal = await AsyncStorage.getItem(`bitc_following_${targetUserId}`);
+    if (localVal === "true") return true;
+    if (localVal === "false") return false;
+  } catch {}
+
+  return serverFollowing;
+}
+
+export async function toggleFollowUser(
+  targetUserId: string,
+  follow: boolean,
+  currentCount = 0
+): Promise<{ ok: boolean; newFollowersCount: number }> {
+  try {
+    await AsyncStorage.setItem(`bitc_following_${targetUserId}`, follow ? "true" : "false");
+  } catch {}
+
+  const calcCount = Math.max(0, currentCount + (follow ? 1 : -1));
+  let finalCount = calcCount;
+
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      const { data: userRes } = await sb.auth.getUser();
+      const myId = userRes?.user?.id;
+      if (myId && myId !== targetUserId) {
+        if (follow) {
+          await sb.from("user_follows").insert({ follower_id: myId, following_id: targetUserId });
+        } else {
+          await sb.from("user_follows").delete().eq("follower_id", myId).eq("following_id", targetUserId);
+        }
+
+        const { count } = await sb
+          .from("user_follows")
+          .select("id", { count: "exact", head: true })
+          .eq("following_id", targetUserId);
+
+        if (count !== null && count > 0) {
+          finalCount = count;
+        }
+      }
+
+      await sb.from("profiles").update({ followers_count: finalCount } as any).eq("id", targetUserId);
+    } catch (err) {
+      console.warn("Supabase follow toggle notice:", err);
+    }
+  }
+
+  return { ok: true, newFollowersCount: finalCount };
+}
+
+export async function fetchUserProfile(targetUserId: string): Promise<PublicProfile | null> {
+  const sb = getSupabase();
+  const followState = await checkIsFollowing(targetUserId);
+
+  let profileData: any = null;
+  if (sb) {
+    const { data } = await sb
+      .from("profiles")
+      .select("id, full_name, avatar_url, bio, role, projects_count, followers_count, rating")
+      .eq("id", targetUserId)
+      .single();
+    if (data) profileData = data;
+  }
+
+  const baseCount = Number(profileData?.followers_count ?? 0);
+  const displayCount = followState ? Math.max(1, baseCount) : baseCount;
+
+  return {
+    id: targetUserId,
+    fullName: String(profileData?.full_name ?? "Creative Member"),
+    avatarUrl: profileData?.avatar_url ? String(profileData.avatar_url) : null,
+    bio: profileData?.bio ? String(profileData.bio) : null,
+    role: profileData?.role ? String(profileData.role) : "creative",
+    projectsCount: Number(profileData?.projects_count ?? 0),
+    followersCount: displayCount,
+    rating: Number(profileData?.rating ?? 5.0),
+    isFollowing: followState,
+  };
+}
+
+export async function fetchUserPosts(targetUserId: string, limit = 20): Promise<MyPost[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("posts")
+    .select("id,text,created_at,views,likes,comments,reach,bookmark")
+    .eq("user_id", targetUserId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error || !data) return [];
+  return (data as any[]).map((r) => ({
+    id: String(r.id),
+    time: toTimeString(r.created_at),
+    text: String(r.text ?? ""),
+    views: String(r.views ?? 0),
+    likes: String(r.likes ?? 0),
+    comments: String(r.comments ?? 0),
+    reach: String(r.reach ?? 0),
+    bookmark: Boolean(r.bookmark ?? false),
+  }));
+}
+
+export async function fetchUserPortfolio(targetUserId: string, limit = 20): Promise<MyPortfolioItem[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("portfolio_items")
+    .select("id,title,image_url,created_at")
+    .eq("user_id", targetUserId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error || !data) return [];
+  return (data as any[]).map((r) => ({
+    id: String(r.id),
+    title: String(r.title ?? ""),
+    image_url: r.image_url ? String(r.image_url) : null,
+    created_at: r.created_at ? String(r.created_at) : null,
+  }));
+}
+
