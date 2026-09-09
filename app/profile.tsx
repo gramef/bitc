@@ -1,5 +1,6 @@
 import SafeScreen from "@/components/SafeScreen";
 import { useAuth } from "@/contexts/AuthContext";
+import { getRoleBadge } from "@/services/permissions";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
@@ -232,32 +233,37 @@ export default function UserProfile() {
             <Text style={styles.name}>{fullName}</Text>
             <MaterialIcons name="verified" size={18} color={colors.accentYellow} />
           </View>
-          {authProfile?.role && authProfile.role !== "user" && (
-            <View style={{
-              alignSelf: "flex-start",
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 4,
-              backgroundColor: authProfile.role === "business" ? "#6C5CE720" : authProfile.role === "admin" ? "#E1705520" : "#00B89420",
-              paddingHorizontal: 10,
-              paddingVertical: 4,
-              borderRadius: 12,
-              marginTop: 4,
-            }}>
-              <MaterialIcons
-                name={authProfile.role === "business" ? "work" : authProfile.role === "admin" ? "admin-panel-settings" : "brush"}
-                size={14}
-                color={authProfile.role === "business" ? "#6C5CE7" : authProfile.role === "admin" ? "#E17055" : "#00B894"}
-              />
-              <Text style={{
-                color: authProfile.role === "business" ? "#6C5CE7" : authProfile.role === "admin" ? "#E17055" : "#00B894",
-                fontFamily: fonts.semibold,
-                fontSize: 12,
-                textTransform: "capitalize",
-              }}>
-                {authProfile.role}
-              </Text>
-            </View>
+          {authProfile?.role && (
+            (() => {
+              const badge = getRoleBadge(authProfile.role);
+              return (
+                <View style={{
+                  alignSelf: "flex-start",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                  backgroundColor: badge.bgColor,
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  borderRadius: 12,
+                  marginTop: 4,
+                }}>
+                  <MaterialIcons
+                    name={badge.icon as any}
+                    size={14}
+                    color={badge.color}
+                  />
+                  <Text style={{
+                    color: badge.color,
+                    fontFamily: fonts.semibold,
+                    fontSize: 12,
+                    textTransform: "capitalize",
+                  }}>
+                    {badge.label}
+                  </Text>
+                </View>
+              );
+            })()
           )}
           <Text style={styles.bio}>{bio || ""}</Text>
         </View>

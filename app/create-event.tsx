@@ -1,6 +1,7 @@
 import SafeScreen from "@/components/SafeScreen";
 import { useAuth } from "@/contexts/AuthContext";
 import { getSupabase, getSupabaseUrl } from "@/lib/supabase";
+import { getRoleBadge, hasPermission } from "@/services/permissions";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -22,9 +23,15 @@ import {
 
 export default function CreateEvent() {
     const router = useRouter();
-    const { user, profile, hasRole } = useAuth();
+    const { user, profile } = useAuth();
+    const role = profile?.role ?? "user";
+    const badge = getRoleBadge(role);
+    const canCreate = hasPermission(role, "canCreateEvent");
 
     const [title, setTitle] = useState("");
+    const [eventType, setEventType] = useState(
+        role === "creative" ? "Community Meetup" : "Branded Event"
+    );
     const [description, setDescription] = useState("");
     const [org, setOrg] = useState(profile?.fullName ?? "");
     const [city, setCity] = useState("");
@@ -39,15 +46,26 @@ export default function CreateEvent() {
 
     const [saving, setSaving] = useState(false);
 
-    // Guard: only business/admin can create events
-    if (!hasRole("business", "admin")) {
+    // Guard: Attendees can switch persona to host events
+    if (!canCreate) {
         return (
             <SafeScreen>
                 <View style={styles.guardWrap}>
-                    <MaterialIcons name="lock" size={48} color={colors.textSecondary} />
-                    <Text style={styles.guardText}>Only Business accounts can create events.</Text>
-                    <Pressable style={styles.guardBtn} onPress={() => router.back()}>
-                        <Text style={styles.guardBtnText}>Go Back</Text>
+                    <View style={styles.guardIconRing}>
+                        <MaterialIcons name="event-available" size={42} color={colors.accentYellow} />
+                    </View>
+                    <Text style={styles.guardTitle}>Host Events on BITC</Text>
+                    <Text style={styles.guardText}>
+                        Event hosting is available for Creatives, Studios, and Business accounts. Switch your account persona to start hosting community meetups or branded summits.
+                    </Text>
+                    <Pressable
+                        style={styles.guardBtn}
+                        onPress={() => router.push("/onboarding/identity" as any)}
+                    >
+                        <Text style={styles.guardBtnText}>Switch Account Persona</Text>
+                    </Pressable>
+                    <Pressable style={styles.guardBackBtn} onPress={() => router.back()}>
+                        <Text style={styles.guardBackBtnText}>Go Back</Text>
                     </Pressable>
                 </View>
             </SafeScreen>
@@ -169,13 +187,52 @@ export default function CreateEvent() {
                         )}
                     </Pressable>
 
+                    {/* Host Persona Indicator */}
+                    <View style={[styles.hostBadgeCard, { borderColor: badge.color + "40" }]}>
+                        <View style={[styles.hostBadgeIcon, { backgroundColor: badge.bgColor }]}>
+                            <MaterialIcons name={badge.icon as any} size={18} color={badge.color} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.hostBadgeTitle, { color: badge.color }]}>
+                                {role === "creative" ? "Creative Community Host" : "Official Business Host"}
+                            </Text>
+                            <Text style={styles.hostBadgeSub}>
+                                {role === "creative"
+                                    ? "Hosting as a creator: Community meetups, portfolio jams & workshops."
+                                    : "Hosting as an organization: Branded summits, panels & ticketed experiences."}
+                            </Text>
+                        </View>
+                    </View>
+
+                    {/* Event Format Selector */}
+                    <Text style={styles.label}>Event Format</Text>
+                    <View style={styles.formatRow}>
+                        {(role === "creative"
+                            ? ["Community Meetup", "Portfolio Jam", "Design Workshop", "Live Demo", "Brunch & Chat"]
+                            : ["Official Summit", "Industry Panel", "Exclusive Mixer", "Product Demo Day"]
+                        ).map((fmt) => {
+                            const isSel = eventType === fmt;
+                            return (
+                                <Pressable
+                                    key={fmt}
+                                    style={[styles.formatChip, isSel && styles.formatChipActive]}
+                                    onPress={() => setEventType(fmt)}
+                                >
+                                    <Text style={[styles.formatChipText, isSel && styles.formatChipTextActive]}>
+                                        {fmt}
+                                    </Text>
+                                </Pressable>
+                            );
+                        })}
+                    </View>
+
                     {/* Title */}
                     <Text style={styles.label}>Event Title *</Text>
                     <TextInput
                         style={styles.input}
                         value={title}
                         onChangeText={setTitle}
-                        placeholder="e.g. Brunch in the City Vol. 5"
+                        placeholder={role === "creative" ? "e.g. Saturday Portfolio Walkthrough & Coffee" : "e.g. Brunch in the City Vol. 5"}
                         placeholderTextColor={colors.textSecondary}
                     />
 
@@ -342,8 +399,77 @@ const styles = StyleSheet.create({
         marginTop: spacing.xl,
     },
     publishText: { color: colors.textDark, fontFamily: fonts.bold, fontSize: fonts.size.lg },
+    hostBadgeCard: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: spacing.md,
+        backgroundColor: colors.surface,
+        borderRadius: radii.card,
+        borderWidth: 1,
+        padding: spacing.md,
+        marginBottom: spacing.xs,
+    },
+    hostBadgeIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    hostBadgeTitle: {
+        fontFamily: fonts.bold,
+        fontSize: 14,
+    },
+    hostBadgeSub: {
+        color: colors.textSecondary,
+        fontFamily: fonts.regular,
+        fontSize: 12,
+        lineHeight: 16,
+        marginTop: 2,
+    },
+    formatRow: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        gap: 8,
+        marginTop: 2,
+    },
+    formatChip: {
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.outline,
+        borderRadius: radii.pill,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+    },
+    formatChipActive: {
+        borderColor: colors.accentYellow,
+        backgroundColor: "#201E15",
+    },
+    formatChipText: {
+        color: colors.textSecondary,
+        fontFamily: fonts.regular,
+        fontSize: 12,
+    },
+    formatChipTextActive: {
+        color: colors.accentYellow,
+        fontFamily: fonts.semibold,
+    },
     guardWrap: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background, padding: spacing.xl },
-    guardText: { color: colors.textSecondary, fontFamily: fonts.regular, fontSize: fonts.size.md, textAlign: "center", marginTop: spacing.md },
-    guardBtn: { marginTop: spacing.lg, backgroundColor: colors.surface, borderRadius: radii.pill, paddingHorizontal: 24, paddingVertical: 12, borderWidth: 1, borderColor: colors.outline },
-    guardBtnText: { color: colors.textPrimary, fontFamily: fonts.semibold, fontSize: fonts.size.md },
+    guardIconRing: {
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        backgroundColor: "#EAD05415",
+        borderWidth: 1.5,
+        borderColor: colors.accentYellow,
+        alignItems: "center",
+        justifyContent: "center",
+        marginBottom: spacing.md,
+    },
+    guardTitle: { color: colors.textPrimary, fontFamily: fonts.bold, fontSize: 20, textAlign: "center", marginBottom: 6 },
+    guardText: { color: colors.textSecondary, fontFamily: fonts.regular, fontSize: fonts.size.sm, textAlign: "center", lineHeight: 20 },
+    guardBtn: { marginTop: spacing.lg, backgroundColor: colors.accentYellow, borderRadius: radii.pill, paddingHorizontal: 24, paddingVertical: 14, width: "100%", alignItems: "center" },
+    guardBtnText: { color: colors.textDark, fontFamily: fonts.bold, fontSize: fonts.size.md },
+    guardBackBtn: { marginTop: spacing.md, paddingVertical: 8 },
+    guardBackBtnText: { color: colors.textSecondary, fontFamily: fonts.semibold, fontSize: fonts.size.sm },
 });

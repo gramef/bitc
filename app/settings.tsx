@@ -1,5 +1,6 @@
 import SafeScreen from "@/components/SafeScreen";
 import { useAuth } from "@/contexts/AuthContext";
+import { getRoleBadge } from "@/services/permissions";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
@@ -30,6 +31,9 @@ type SettingItem = {
 export default function Settings() {
     const router = useRouter();
     const { profile, user, signOut } = useAuth();
+    const role = profile?.role ?? "user";
+    const badge = getRoleBadge(role);
+
     const [pushNotifs, setPushNotifs] = useState(true);
     const [emailNotifs, setEmailNotifs] = useState(true);
     const [darkMode, setDarkMode] = useState(true);
@@ -113,6 +117,13 @@ export default function Settings() {
             label: "Edit Profile",
             subtitle: "Update your name, bio, and photo",
             onPress: () => router.push("/profile-setup"),
+        },
+        {
+            icon: "badge",
+            label: "Account Persona",
+            subtitle: `${badge.label} · ${badge.description}`,
+            color: badge.color,
+            onPress: () => router.push("/onboarding/identity" as any),
         },
         {
             icon: "email",
@@ -233,15 +244,39 @@ export default function Settings() {
                     <View style={styles.profileAvatarWrap}>
                         <Image source={avatarSrc} style={styles.profileAvatar} contentFit="cover" />
                     </View>
-                    <View style={{ flex: 1 }}>
+                    <View style={{ flex: 1, gap: 3 }}>
                         <Text style={styles.profileName}>{profile?.fullName ?? "Guest"}</Text>
                         <Text style={styles.profileEmail}>{user?.email ?? "Not signed in"}</Text>
+                        <View style={[styles.profileRoleBadge, { backgroundColor: badge.bgColor }]}>
+                            <MaterialIcons name={badge.icon as any} size={12} color={badge.color} />
+                            <Text style={[styles.profileRoleBadgeText, { color: badge.color }]}>
+                                {badge.label.toUpperCase()}
+                            </Text>
+                        </View>
                     </View>
                     <Pressable
                         style={styles.editProfileBtn}
                         onPress={() => router.push("/profile-setup")}
                     >
                         <MaterialIcons name="edit" size={16} color={colors.accentYellow} />
+                    </Pressable>
+                </View>
+
+                {/* Persona Switcher Banner */}
+                <View style={[styles.personaBanner, { borderColor: badge.color + "35" }]}>
+                    <View style={[styles.personaBannerIcon, { backgroundColor: badge.bgColor }]}>
+                        <MaterialIcons name={badge.icon as any} size={22} color={badge.color} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.personaBannerTitle}>{badge.label} Account</Text>
+                        <Text style={styles.personaBannerSub}>{badge.description}</Text>
+                    </View>
+                    <Pressable
+                        style={[styles.switchPersonaBtn, { borderColor: badge.color + "60" }]}
+                        onPress={() => router.push("/onboarding/identity" as any)}
+                    >
+                        <Text style={[styles.switchPersonaBtnText, { color: badge.color }]}>Switch</Text>
+                        <MaterialIcons name="chevron-right" size={14} color={badge.color} />
                     </Pressable>
                 </View>
 
@@ -335,7 +370,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: colors.outline,
         padding: spacing.md,
-        marginBottom: spacing.lg,
+        marginBottom: spacing.sm,
     },
     profileAvatarWrap: {
         width: 52,
@@ -358,7 +393,65 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         fontFamily: fonts.regular,
         fontSize: fonts.size.sm,
+        marginTop: 1,
+    },
+    profileRoleBadge: {
+        alignSelf: "flex-start",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderRadius: 4,
         marginTop: 2,
+    },
+    profileRoleBadgeText: {
+        fontFamily: fonts.bold,
+        fontSize: 10,
+        letterSpacing: 0.5,
+    },
+    personaBanner: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: spacing.md,
+        marginHorizontal: spacing.lg,
+        backgroundColor: colors.surface,
+        borderRadius: radii.card,
+        borderWidth: 1,
+        padding: spacing.md,
+        marginBottom: spacing.md,
+    },
+    personaBannerIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    personaBannerTitle: {
+        color: colors.textPrimary,
+        fontFamily: fonts.bold,
+        fontSize: 14,
+    },
+    personaBannerSub: {
+        color: colors.textSecondary,
+        fontFamily: fonts.regular,
+        fontSize: 11,
+        marginTop: 2,
+    },
+    switchPersonaBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 2,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: radii.pill,
+        borderWidth: 1,
+        backgroundColor: colors.surface,
+    },
+    switchPersonaBtnText: {
+        fontFamily: fonts.semibold,
+        fontSize: 12,
     },
     editProfileBtn: {
         width: 36,

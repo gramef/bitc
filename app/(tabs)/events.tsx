@@ -2,6 +2,7 @@ import SafeScreen from "@/components/SafeScreen";
 import { Chip, EmptyState, SearchBar } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { EventRow, fetchEvents } from "@/services/events";
+import { hasPermission } from "@/services/permissions";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
@@ -141,8 +142,8 @@ export default function Events() {
         )}
       </ScrollView>
 
-      {/* Create Event FAB — only for business/admin */}
-      {hasRole("business", "admin") && (
+      {/* Create Event FAB — for creatives, businesses, and admins */}
+      {hasPermission(profile?.role, "canCreateEvent") && (
         <Pressable
           style={styles.fab}
           onPress={() => router.push("/create-event" as any)}

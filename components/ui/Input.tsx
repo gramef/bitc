@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pressable, StyleSheet, TextInput, View, ViewStyle } from "react-native";
+import { KeyboardTypeOptions, Pressable, StyleSheet, TextInput, View, ViewStyle } from "react-native";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
@@ -11,7 +11,7 @@ type Props = {
   showToggle?: boolean;
   multiline?: boolean;
   style?: ViewStyle;
-  keyboardType?: "default" | "email-address";
+  keyboardType?: KeyboardTypeOptions;
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
 };
 

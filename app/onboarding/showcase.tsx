@@ -52,7 +52,7 @@ export default function OnboardingThree() {
           <View style={[styles.dot, styles.dotActive]} />
         </View>
 
-        <Pressable onPress={() => router.push("/profile-setup")} style={styles.cta}>
+        <Pressable onPress={() => router.push("/signup")} style={styles.cta}>
           <Text style={styles.ctaText}>Get Started</Text>
         </Pressable>
       </View>

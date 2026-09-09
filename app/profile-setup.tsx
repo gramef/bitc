@@ -2,7 +2,8 @@ import SafeScreen from "@/components/SafeScreen";
 import { Button, Input } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { getSupabase, getSupabaseUrl } from "@/lib/supabase";
-import { colors, fonts } from "@/theme/tokens";
+import { getRoleBadge } from "@/services/permissions";
+import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
@@ -14,7 +15,43 @@ export default function ProfileSetup() {
   const router = useRouter();
   const { user, profile, refreshProfile } = useAuth();
 
-  const progress = useMemo(() => 0.65, []);
+  const role = profile?.role ?? "creative";
+  const badge = getRoleBadge(role);
+
+  const personaConfig = useMemo(() => {
+    switch (role) {
+      case "business":
+        return {
+          headerTitle: "Company & Studio Profile",
+          headerSubtitle: "Present your brand and studio identity to creators and attendees.",
+          nameLabel: "Company / Studio Name *",
+          namePlaceholder: "e.g. Acme Design Studio",
+          bioLabel: "Studio Mission & Overview",
+          bioPlaceholder: "What kind of work does your company create and what talent are you looking for?",
+          avatarHint: "Tap camera to upload studio logo",
+        };
+      case "creative":
+        return {
+          headerTitle: "Creative Profile Setup",
+          headerSubtitle: "Showcase your identity to land briefs, join audio rooms, and connect.",
+          nameLabel: "Your Name / Alias *",
+          namePlaceholder: "e.g. Alex Morgan",
+          bioLabel: "Creative Bio & Superpower",
+          bioPlaceholder: "A snapshot of your craft, design philosophy, and what you build…",
+          avatarHint: "Tap camera to upload profile photo",
+        };
+      default:
+        return {
+          headerTitle: "Community Profile",
+          headerSubtitle: "Let event organizers and fellow members know who you are.",
+          nameLabel: "Full Name *",
+          namePlaceholder: "e.g. Jordan Lee",
+          bioLabel: "Bio",
+          bioPlaceholder: "A brief bio about yourself and what you're passionate about…",
+          avatarHint: "Tap camera to upload profile photo",
+        };
+    }
+  }, [role]);
 
   const [fullName, setFullName] = useState("");
   const [bio, setBio] = useState("");
@@ -113,7 +150,11 @@ export default function ProfileSetup() {
       return;
     }
     if (!fullName.trim()) {
-      setError("Please enter your name");
+      setError(
+        role === "business"
+          ? "Please enter your company / studio name"
+          : "Please enter your name"
+      );
       return;
     }
     setLoading(true);
@@ -159,12 +200,19 @@ export default function ProfileSetup() {
         >
           <MaterialIcons name="arrow-back" size={24} color="#fff" />
         </Pressable>
-        <Text style={styles.title}>Profile Setup</Text>
-        <Text style={styles.subtitle}>Let others know who you are.</Text>
+        <View style={styles.badgeRow}>
+          <View style={[styles.personaPill, { backgroundColor: badge.bgColor }]}>
+            <MaterialIcons name={badge.icon as any} size={14} color={badge.color} />
+            <Text style={[styles.personaPillText, { color: badge.color }]}>
+              {badge.label.toUpperCase()} SETUP
+            </Text>
+          </View>
+          <Text style={styles.stepText}>Step 3 of 3</Text>
+        </View>
+        <Text style={styles.title}>{personaConfig.headerTitle}</Text>
+        <Text style={styles.subtitle}>{personaConfig.headerSubtitle}</Text>
         <View style={styles.progressTrack}>
-          <View
-            style={[styles.progressFill, { width: `${progress * 100}%` }]}
-          />
+          <View style={[styles.progressFill, { width: "100%" }]} />
         </View>
       </View>
 
@@ -187,21 +235,29 @@ export default function ProfileSetup() {
             <MaterialIcons name="photo-camera" size={18} color="#141414" />
           </Pressable>
         </View>
+        <Text style={styles.avatarHintText}>{personaConfig.avatarHint}</Text>
 
-        <Text style={styles.label}>Full Name</Text>
+        <Text style={styles.label}>{personaConfig.nameLabel}</Text>
         <Input
           value={fullName}
           onChangeText={setFullName}
-          placeholder="Full Name"
+          placeholder={personaConfig.namePlaceholder}
         />
 
-        <Text style={styles.label}>Bio</Text>
-        <Input value={bio} onChangeText={setBio} placeholder="Bio" multiline />
+        <Text style={styles.label}>{personaConfig.bioLabel}</Text>
+        <Input
+          value={bio}
+          onChangeText={setBio}
+          placeholder={personaConfig.bioPlaceholder}
+          multiline
+        />
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {info ? <Text style={styles.info}>{info}</Text> : null}
+
+        <View style={{ height: spacing.md }} />
         <Button
-          title={loading ? "Saving…" : "Save Profile"}
+          title={loading ? "Saving Profile…" : "Complete Setup & Enter BITC"}
           onPress={handleSave}
         />
       </ScrollView>
@@ -281,5 +337,37 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: fonts.size.sm,
     marginTop: 8,
+  },
+  badgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  personaPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  personaPillText: {
+    fontFamily: fonts.bold,
+    fontSize: 10,
+    letterSpacing: 0.5,
+  },
+  stepText: {
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+    fontSize: 11,
+  },
+  avatarHintText: {
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    textAlign: "center",
+    marginBottom: 12,
   },
 });

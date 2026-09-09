@@ -99,7 +99,7 @@ export default function VerifyEmailScreen() {
       setMessage("Email verified successfully! Setting up your profile…");
       await refreshProfile();
       setTimeout(() => {
-        router.replace("/profile-setup");
+        router.replace("/onboarding/identity");
       }, 700);
     } catch (e: any) {
       setError(e?.message || "Verification failed. Please check your connection.");
@@ -134,10 +134,10 @@ export default function VerifyEmailScreen() {
 
       const u = data.user;
       if (u.email_confirmed_at || (u as any).confirmed_at) {
-        setMessage("Email verified! Redirecting to setup…");
+        setMessage("Email verified! Redirecting to persona selection…");
         await refreshProfile();
         setTimeout(() => {
-          router.replace("/profile-setup");
+          router.replace("/onboarding/identity");
         }, 700);
       } else {
         setError("Email is not verified yet. Please enter the 6-digit code sent to your inbox.");
