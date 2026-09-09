@@ -31,7 +31,8 @@ export default function ProfileSetup() {
 
   // Pre-fill from AuthContext profile
   useEffect(() => {
-    if (user && !user.email_confirmed_at && (user as any).confirmed_at === undefined) {
+    const isConfirmed = Boolean(user?.email_confirmed_at || (user as any)?.confirmed_at);
+    if (user && !isConfirmed) {
       router.replace({ pathname: "/verify-email", params: { email: user.email } } as any);
       return;
     }

@@ -56,11 +56,8 @@ export default function Signup() {
         await sb.from("profiles").upsert({ id: userId }, { onConflict: "id" });
       }
       await refreshProfile();
-      if (data.session) {
-        router.replace("/profile-setup");
-      } else {
-        router.replace({ pathname: "/verify-email", params: { email: email.trim() } } as any);
-      }
+      // Always require email verification before onboarding and bio setup
+      router.replace({ pathname: "/verify-email", params: { email: email.trim() } } as any);
     } catch (e: any) {
       setError(e?.message || "Network error — check your connection");
     } finally {

@@ -47,7 +47,8 @@ export default function Login() {
         return;
       }
 
-      if (data?.user && !data.user.email_confirmed_at && (data.user as any).confirmed_at === undefined) {
+      const isConfirmed = Boolean(data?.user?.email_confirmed_at || (data?.user as any)?.confirmed_at);
+      if (data?.user && !isConfirmed) {
         router.replace({ pathname: "/verify-email", params: { email: email.trim() } } as any);
         return;
       }
