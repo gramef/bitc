@@ -46,12 +46,9 @@ export default function OnboardingBusiness() {
   const { user, refreshProfile } = useAuth();
 
   const [companyName, setCompanyName] = useState("");
-  const [selectedIndustry, setSelectedIndustry] = useState<string>("Design & Branding Studio");
-  const [selectedGoals, setSelectedGoals] = useState<string[]>([
-    "Hire top creative talent",
-    "Host branded events & summits",
-  ]);
-  const [teamSize, setTeamSize] = useState<string>("6-20");
+  const [selectedIndustry, setSelectedIndustry] = useState<string>("");
+  const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
+  const [teamSize, setTeamSize] = useState<string>("");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

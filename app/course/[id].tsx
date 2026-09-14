@@ -308,21 +308,27 @@ export default function CourseView() {
         {activeTab === "Reviews" && (
           <View style={styles.tabCard}>
             <Text style={styles.tabCardTitle}>Learner Community Reviews</Text>
-            {course.reviews.map((rev, idx) => (
-              <View key={idx} style={styles.reviewItem}>
-                <View style={styles.reviewHeader}>
-                  <View>
-                    <Text style={styles.reviewerName}>{rev.name}</Text>
-                    <Text style={styles.reviewerRole}>{rev.role}</Text>
+            {course.reviews.length === 0 ? (
+              <Text style={{ color: colors.textSecondary, fontFamily: fonts.regular, fontSize: fonts.size.sm, marginTop: spacing.sm }}>
+                No reviews yet for this masterclass. Be the first to complete the modules and share your feedback!
+              </Text>
+            ) : (
+              course.reviews.map((rev, idx) => (
+                <View key={idx} style={styles.reviewItem}>
+                  <View style={styles.reviewHeader}>
+                    <View>
+                      <Text style={styles.reviewerName}>{rev.name}</Text>
+                      <Text style={styles.reviewerRole}>{rev.role}</Text>
+                    </View>
+                    <View style={styles.ratingRow}>
+                      <MaterialIcons name="star" size={16} color={colors.accentYellow} />
+                      <Text style={styles.ratingText}>{rev.rating}.0</Text>
+                    </View>
                   </View>
-                  <View style={styles.ratingRow}>
-                    <MaterialIcons name="star" size={16} color={colors.accentYellow} />
-                    <Text style={styles.ratingText}>{rev.rating}.0</Text>
-                  </View>
+                  <Text style={styles.reviewComment}>"{rev.comment}"</Text>
                 </View>
-                <Text style={styles.reviewComment}>"{rev.comment}"</Text>
-              </View>
-            ))}
+              ))
+            )}
           </View>
         )}
 

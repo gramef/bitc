@@ -47,12 +47,9 @@ export default function OnboardingCreative() {
   const router = useRouter();
   const { user, refreshProfile } = useAuth();
 
-  const [selectedCrafts, setSelectedCrafts] = useState<string[]>(["UI/UX Design"]);
-  const [selectedGoals, setSelectedGoals] = useState<string[]>([
-    "Land freelance client gigs",
-    "Host creative meetups & reviews",
-  ]);
-  const [experience, setExperience] = useState<string>("mid");
+  const [selectedCrafts, setSelectedCrafts] = useState<string[]>([]);
+  const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
+  const [experience, setExperience] = useState<string>("");
   const [portfolioUrl, setPortfolioUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

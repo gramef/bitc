@@ -64,24 +64,11 @@ export default function ChatThread() {
         recipientName: conversation?.participant_name,
         recipientAvatar: conversation?.participant_avatar,
         recipientRole: conversation?.participant_role,
+        isVerified: conversation?.is_verified,
         text: textToSend,
       });
 
       setMessages((prev) => [...prev, sent]);
-
-      // Auto-reply simulation if conversation is with Kofi
-      if (id === "usr_201") {
-        setTimeout(async () => {
-          const reply = await sendDirectMessage({
-            recipientId: "me",
-            recipientName: "Kofi Mensah",
-            recipientAvatar:
-              "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
-            text: "Sounds fantastic! Let's arrange a quick 15-min sync on LiveKit or over coffee at the next BITC brunch.",
-          });
-          setMessages((prev) => [...prev, reply]);
-        }, 1200);
-      }
     } catch {
       console.warn("Failed to send message");
     } finally {
@@ -120,7 +107,7 @@ export default function ChatThread() {
           <View style={{ flex: 1 }}>
             <View style={styles.nameRow}>
               <Text style={styles.name}>{conversation.participant_name}</Text>
-              <MaterialIcons name="verified" size={14} color="#00B894" />
+              {conversation.is_verified && <MaterialIcons name="verified" size={14} color="#00B894" />}
             </View>
             <Text style={styles.roleText} numberOfLines={1}>
               {conversation.participant_role}

@@ -433,7 +433,9 @@ export default function UserProfile() {
         <View style={styles.headerText}>
           <View style={styles.nameRow}>
             <Text style={styles.name}>{fullName}</Text>
-            <MaterialIcons name="verified" size={18} color={colors.accentYellow} />
+            {authProfile?.isVerified && (
+              <MaterialIcons name="verified" size={18} color={colors.accentYellow} />
+            )}
           </View>
           {authProfile?.role && (
             (() => {
@@ -925,7 +927,9 @@ export default function UserProfile() {
                     <View style={{ flex: 1 }}>
                       <View style={styles.nameRowSmall}>
                         <Text style={styles.postName}>{fullName}</Text>
-                        <MaterialIcons name="verified" size={16} color={colors.accentYellow} />
+                        {authProfile?.isVerified && (
+                          <MaterialIcons name="verified" size={16} color={colors.accentYellow} />
+                        )}
                       </View>
                       <Text style={styles.postMeta}>{p.time}</Text>
                     </View>

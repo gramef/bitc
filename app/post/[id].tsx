@@ -20,6 +20,7 @@ type CommentItem = {
   time: string;
   text: string;
   avatarUrl?: string | null;
+  isVerified?: boolean;
   likes: string;
   liked: boolean;
 };
@@ -42,6 +43,7 @@ export default function PostView() {
     createdAt: string;
     text: string;
     avatarUrl?: string | null;
+    isVerified?: boolean;
     stats: { views: string; likes: string; comments: string; shares: string };
   } | null>(null);
   const [comments, setComments] = useState<CommentItem[]>([]);
@@ -61,6 +63,7 @@ export default function PostView() {
           createdAt: detail.createdAt,
           text: detail.text,
           avatarUrl: detail.author.avatar_url ?? null,
+          isVerified: Boolean(detail.author.is_verified),
           stats: {
             views: String(detail.views),
             likes: String(detail.likes),
@@ -85,6 +88,7 @@ export default function PostView() {
           time: c.time,
           text: c.text,
           avatarUrl: c.author.avatar_url ?? null,
+          isVerified: Boolean(c.author.is_verified),
           likes: String(c.likes ?? 0),
           liked: Boolean(c.likedByMe ?? false),
         }))
@@ -144,6 +148,7 @@ export default function PostView() {
             time: c.time,
             text: c.text,
             avatarUrl: c.author.avatar_url ?? null,
+            isVerified: Boolean(c.author.is_verified),
             likes: String(c.likes ?? 0),
             liked: Boolean(c.likedByMe ?? false),
           }))
@@ -236,7 +241,7 @@ export default function PostView() {
               <View style={{ flex: 1 }}>
                 <View style={styles.nameRowSmall}>
                   <Text style={styles.postName}>{post.name}</Text>
-                  <MaterialIcons name="verified" size={16} color={colors.accentYellow} />
+                  {post.isVerified && <MaterialIcons name="verified" size={16} color={colors.accentYellow} />}
                 </View>
                 <Text style={styles.postMeta}>{post.role}</Text>
               </View>
@@ -285,7 +290,7 @@ export default function PostView() {
                 <View style={{ flex: 1, marginLeft: spacing.sm }}>
                   <View style={styles.nameRowSmall}>
                     <Text style={styles.postName}>{c.name}</Text>
-                    <MaterialIcons name="verified" size={16} color={colors.accentYellow} />
+                    {c.isVerified && <MaterialIcons name="verified" size={16} color={colors.accentYellow} />}
                     <Text style={styles.timeDot}>· {c.time}</Text>
                   </View>
                   <Text style={styles.postMeta}>{c.role}</Text>

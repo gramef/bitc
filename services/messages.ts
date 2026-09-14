@@ -26,19 +26,32 @@ export type Conversation = {
   participant_name: string;
   participant_avatar: string | null;
   participant_role: string;
+  is_verified?: boolean;
   last_message: string;
   last_message_time: string;
   unread_count: number;
 };
 
-const MESSAGES_STORAGE_KEY = "@bitc_direct_messages";
+async function getMessagesStorageKey(): Promise<string> {
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      const { data: userRes } = await sb.auth.getUser();
+      if (userRes?.user?.id) {
+        return `@bitc_direct_messages_${userRes.user.id}`;
+      }
+    } catch {}
+  }
+  return "@bitc_direct_messages_guest";
+}
 
 async function getStoredState(): Promise<{
   conversations: Conversation[];
   messages: Record<string, DirectMessage[]>;
 }> {
   try {
-    const raw = await AsyncStorage.getItem(MESSAGES_STORAGE_KEY);
+    const key = await getMessagesStorageKey();
+    const raw = await AsyncStorage.getItem(key);
     if (!raw) {
       return { conversations: [], messages: {} };
     }
@@ -69,20 +82,38 @@ export async function fetchConversationDetails(
   );
 
   if (!conversation) {
+    let name = "Creative Member";
+    let avatar: string | null = null;
+    let role = "Designer";
+    let isVerified = false;
+
+    try {
+      const { fetchUserProfile } = await import("@/services/profile");
+      const p = await fetchUserProfile(convOrUserId);
+      if (p) {
+        name = p.fullName;
+        avatar = p.avatarUrl ?? null;
+        role = p.role || p.bio || "Member";
+        isVerified = Boolean(p.isVerified);
+      }
+    } catch {}
+
     // Generate new conversation container on the fly if starting a new chat
     conversation = {
       id: `conv_${convOrUserId}`,
       participant_id: convOrUserId,
-      participant_name: "Creative Member",
-      participant_avatar: null,
-      participant_role: "Designer",
+      participant_name: name,
+      participant_avatar: avatar,
+      participant_role: role,
+      is_verified: isVerified,
       last_message: "Conversation started",
       last_message_time: "Just now",
       unread_count: 0,
     };
     state.conversations.unshift(conversation);
     state.messages[conversation.id] = [];
-    await AsyncStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(state));
+    const key = await getMessagesStorageKey();
+    await AsyncStorage.setItem(key, JSON.stringify(state));
   }
 
   const messages = state.messages[conversation.id] || [];
@@ -97,6 +128,7 @@ export async function sendDirectMessage(params: {
   recipientName?: string;
   recipientAvatar?: string | null;
   recipientRole?: string;
+  isVerified?: boolean;
   text: string;
 }): Promise<DirectMessage> {
   const state = await getStoredState();
@@ -112,6 +144,7 @@ export async function sendDirectMessage(params: {
       participant_name: params.recipientName || "Creative Member",
       participant_avatar: params.recipientAvatar || null,
       participant_role: params.recipientRole || "Designer",
+      is_verified: Boolean(params.isVerified),
       last_message: params.text,
       last_message_time: timeStr,
       unread_count: 0,
@@ -120,6 +153,9 @@ export async function sendDirectMessage(params: {
   } else {
     conv.last_message = params.text;
     conv.last_message_time = timeStr;
+    if (params.isVerified !== undefined) {
+      conv.is_verified = params.isVerified;
+    }
     // Move to front
     state.conversations = [conv, ...state.conversations.filter((c) => c.id !== conv?.id)];
   }
@@ -141,7 +177,8 @@ export async function sendDirectMessage(params: {
   }
   state.messages[conv.id].push(newMsg);
 
-  await AsyncStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(state));
+  const key = await getMessagesStorageKey();
+  await AsyncStorage.setItem(key, JSON.stringify(state));
 
   // Also try Supabase if table exists
   const sb = getSupabase();

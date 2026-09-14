@@ -10,6 +10,7 @@ export type ProfileInfo = {
   projectsCount: number;
   followersCount: number;
   rating: number;
+  isVerified?: boolean;
 };
 
 export type MyPost = {
@@ -53,7 +54,7 @@ export async function fetchMyProfile(): Promise<ProfileInfo> {
   const userId = userRes.user.id;
   const { data, error } = await sb
     .from("profiles")
-    .select("full_name, avatar_url, bio, projects_count, followers_count, rating")
+    .select("full_name, avatar_url, bio, projects_count, followers_count, rating, is_verified")
     .eq("id", userId)
     .single();
   if (error || !data) return fallback;
@@ -74,6 +75,7 @@ export async function fetchMyProfile(): Promise<ProfileInfo> {
     projectsCount: Number(data.projects_count ?? 0),
     followersCount: Number(data.followers_count ?? 0),
     rating: Number(data.rating ?? 0),
+    isVerified: Boolean((data as any).is_verified ?? false),
   };
 }
 
@@ -338,7 +340,12 @@ export async function fetchPublicPosts(limit = 50): Promise<PublicPost[]> {
   }));
 }
 
-export type AuthorBrief = { full_name: string; avatar_url: string | null; bio: string | null };
+export type AuthorBrief = {
+  full_name: string;
+  avatar_url: string | null;
+  bio: string | null;
+  is_verified?: boolean;
+};
 
 export async function fetchAuthorsByIds(userIds: string[]): Promise<Record<string, AuthorBrief>> {
   const sb = getSupabase();
@@ -347,7 +354,7 @@ export async function fetchAuthorsByIds(userIds: string[]): Promise<Record<strin
   if (!sb || unique.length === 0) return result;
   const { data, error } = await sb
     .from("profiles")
-    .select("id,full_name,avatar_url,bio")
+    .select("id,full_name,avatar_url,bio,is_verified")
     .in("id", unique);
   if (error || !data) return result;
   for (const r of data as any[]) {
@@ -355,6 +362,7 @@ export async function fetchAuthorsByIds(userIds: string[]): Promise<Record<strin
       full_name: String(r.full_name ?? "Member"),
       avatar_url: r.avatar_url ? String(r.avatar_url) : null,
       bio: r.bio ? String(r.bio) : null,
+      is_verified: Boolean(r.is_verified ?? false),
     };
   }
   return result;
@@ -495,6 +503,7 @@ export type PublicProfile = {
   followersCount: number;
   rating: number;
   isFollowing: boolean;
+  isVerified: boolean;
 };
 
 export async function checkIsFollowing(targetUserId: string): Promise<boolean> {
@@ -576,7 +585,7 @@ export async function fetchUserProfile(targetUserId: string): Promise<PublicProf
   if (sb) {
     const { data } = await sb
       .from("profiles")
-      .select("id, full_name, avatar_url, bio, role, projects_count, followers_count, rating")
+      .select("id, full_name, avatar_url, bio, role, projects_count, followers_count, rating, is_verified")
       .eq("id", targetUserId)
       .single();
     if (data) profileData = data;
@@ -600,8 +609,9 @@ export async function fetchUserProfile(targetUserId: string): Promise<PublicProf
     role: profileData?.role ? String(profileData.role) : "creative",
     projectsCount: Number(profileData?.projects_count ?? 0),
     followersCount: displayCount,
-    rating: Number(profileData?.rating ?? 5.0),
+    rating: Number(profileData?.rating ?? 0),
     isFollowing: followState,
+    isVerified: Boolean(profileData?.is_verified ?? false),
   };
 }
 

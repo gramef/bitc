@@ -49,15 +49,9 @@ export default function OnboardingUser() {
   const router = useRouter();
   const { user, refreshProfile } = useAuth();
 
-  const [selectedVibes, setSelectedVibes] = useState<string[]>([
-    "Networking Brunches",
-    "Design Talks & Panels",
-  ]);
-  const [selectedCity, setSelectedCity] = useState<string>("London");
-  const [selectedGoals, setSelectedGoals] = useState<string[]>([
-    "Discover premier creative events",
-    "Meet inspiring creators & founders",
-  ]);
+  const [selectedVibes, setSelectedVibes] = useState<string[]>([]);
+  const [selectedCity, setSelectedCity] = useState<string>("");
+  const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

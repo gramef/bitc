@@ -404,7 +404,7 @@ export default function EventDetail() {
                                         }
                                     }}
                                 >
-                                    <Text style={styles.codeText}>{ticket?.ticket_code || "BITC-BRNC-2026"}</Text>
+                                    <Text style={styles.codeText}>{ticket?.ticket_code || (event?.id ? `BITC-${event.id.slice(0, 6).toUpperCase()}` : "BITC-PASS")}</Text>
                                     <MaterialIcons
                                         name={copied ? "check" : "content-copy"}
                                         size={14}

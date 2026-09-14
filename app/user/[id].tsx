@@ -202,7 +202,9 @@ export default function PublicUserProfileScreen() {
         <View style={styles.headerText}>
           <View style={styles.nameRow}>
             <Text style={styles.name}>{profile.fullName}</Text>
-            <MaterialIcons name="verified" size={18} color={colors.accentYellow} />
+            {profile.isVerified && (
+              <MaterialIcons name="verified" size={18} color={colors.accentYellow} />
+            )}
           </View>
 
           {profile.role && profile.role !== "user" && (
@@ -231,7 +233,7 @@ export default function PublicUserProfileScreen() {
           </View>
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>Ratings</Text>
-            <Text style={styles.statValue}>{profile.rating}</Text>
+            <Text style={styles.statValue}>{profile.rating > 0 ? profile.rating.toFixed(1) : "—"}</Text>
           </View>
         </View>
 
