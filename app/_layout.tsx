@@ -9,7 +9,7 @@ import {
   useFonts,
 } from "@expo-google-fonts/poppins";
 import { Stack } from "expo-router";
-import React from "react";
+import React, { useEffect } from "react";
 import { View } from "react-native";
 import "react-native-get-random-values";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -21,6 +21,12 @@ export default function RootLayout() {
     Poppins_600SemiBold,
     Poppins_700Bold,
   });
+
+  useEffect(() => {
+    import("@/services/notifications").then((m) => {
+      m.registerForPushNotificationsAsync();
+    });
+  }, []);
 
   if (!fontsLoaded) {
     return <View style={{ flex: 1, backgroundColor: colors.background }} />;

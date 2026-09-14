@@ -20,8 +20,11 @@ import {
 
 export default function VerifyEmailScreen() {
   const router = useRouter();
-  const { email: paramEmail } = useLocalSearchParams<{ email?: string }>();
-  const { user, refreshProfile } = useAuth();
+  const { email: paramEmail, persona: paramPersona } = useLocalSearchParams<{
+    email?: string;
+    persona?: string;
+  }>();
+  const { user, profile, refreshProfile } = useAuth();
 
   const [email] = useState(paramEmail || user?.email || "");
   const [code, setCode] = useState("");
@@ -96,10 +99,19 @@ export default function VerifyEmailScreen() {
         return;
       }
 
-      setMessage("Email verified successfully! Setting up your profile…");
+      setMessage("Email verified successfully! Setting up your persona…");
       await refreshProfile();
+      const targetRole = paramPersona || profile?.role;
       setTimeout(() => {
-        router.replace("/onboarding/identity");
+        if (targetRole === "creative") {
+          router.replace("/onboarding/creative" as any);
+        } else if (targetRole === "business") {
+          router.replace("/onboarding/business" as any);
+        } else if (targetRole === "user") {
+          router.replace("/onboarding/user" as any);
+        } else {
+          router.replace("/onboarding/identity");
+        }
       }, 700);
     } catch (e: any) {
       setError(e?.message || "Verification failed. Please check your connection.");
@@ -134,10 +146,19 @@ export default function VerifyEmailScreen() {
 
       const u = data.user;
       if (u.email_confirmed_at || (u as any).confirmed_at) {
-        setMessage("Email verified! Redirecting to persona selection…");
+        setMessage("Email verified! Redirecting to setup…");
         await refreshProfile();
+        const targetRole = paramPersona || profile?.role;
         setTimeout(() => {
-          router.replace("/onboarding/identity");
+          if (targetRole === "creative") {
+            router.replace("/onboarding/creative" as any);
+          } else if (targetRole === "business") {
+            router.replace("/onboarding/business" as any);
+          } else if (targetRole === "user") {
+            router.replace("/onboarding/user" as any);
+          } else {
+            router.replace("/onboarding/identity");
+          }
         }, 700);
       } else {
         setError("Email is not verified yet. Please enter the 6-digit code sent to your inbox.");

@@ -11,6 +11,8 @@ export type JobRow = {
   posted_at: string | null;
   salary: string | null;
   image_url: string | null;
+  created_by?: string | null;
+  user_id?: string | null;
 };
 
 export async function fetchJobs(limit = 20): Promise<JobRow[]> {

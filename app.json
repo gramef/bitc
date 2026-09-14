@@ -10,10 +10,19 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.bitc.app"
+      "bundleIdentifier": "com.bitc.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "BITC uses your camera to scan ticket QR codes at event venue check-in.",
+        "NSMicrophoneUsageDescription": "BITC uses your microphone to let you speak in community audio rooms."
+      }
     },
     "android": {
       "package": "com.bitc.app",
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "POST_NOTIFICATIONS"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -35,7 +44,9 @@
     },
     "plugins": [
       "expo-router",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-camera",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,

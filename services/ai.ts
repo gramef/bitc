@@ -69,13 +69,13 @@ export async function recordAiToolUsage(toolName: string): Promise<void> {
 export async function fetchAiToolsUsedCount(): Promise<number> {
   try {
     const raw = await AsyncStorage.getItem(AI_USAGE_KEY);
-    if (!raw) return 4; // Default starting count for new accounts
+    if (!raw) return 0;
     const history: { tool: string; timestamp: string }[] = JSON.parse(raw);
     const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     const recent = history.filter((item) => new Date(item.timestamp).getTime() >= oneWeekAgo);
-    return Math.max(recent.length, 1);
+    return recent.length;
   } catch {
-    return 4;
+    return 0;
   }
 }
 
@@ -268,6 +268,67 @@ export function getCachedPortfolioAnalysis(): PortfolioAnalysisResult | null {
  */
 export async function interpretBrief(briefText: string): Promise<BriefAnalysisResult> {
   await recordAiToolUsage("Brief Interpreter");
+
+  const geminiApiKey =
+    process.env.EXPO_PUBLIC_GEMINI_API_KEY ||
+    process.env.EXPO_PUBLIC_AI_API_KEY;
+
+  if (geminiApiKey) {
+    try {
+      const prompt = `You are an elite creative operations director and client brief interpreter. Analyze the following client project brief:
+"""${briefText}"""
+
+Output strictly valid JSON with this exact schema:
+{
+  "projectType": string,
+  "clientMaturity": "Startup / Early" | "Established SMB" | "Enterprise" | "Unclear Scope",
+  "estimatedEffort": string (e.g. "3-4 Weeks • 40-50 Hours"),
+  "recommendedPricingTier": string (e.g. "$3,500 – $6,000"),
+  "executiveSummary": string (2-3 sentences summarizing objective and scope),
+  "goals": [array of 2-3 key goals],
+  "deliverables": [array of 3-5 concrete deliverables],
+  "requirements": [array of 2-4 tech/brand requirements],
+  "timeline": [array of 2-3 timeline milestones],
+  "redFlags": [{ "risk": string, "advice": string }],
+  "clarifyingQuestions": [array of 3-4 smart questions to ask the client before scoping]
+}`;
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: "application/json", temperature: 0.3 },
+          }),
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const rawJsonText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (rawJsonText) {
+          const parsed = JSON.parse(rawJsonText);
+          return {
+            projectType: parsed.projectType || "Creative Design Sprint",
+            clientMaturity: parsed.clientMaturity || "Established SMB",
+            estimatedEffort: parsed.estimatedEffort || "2-3 Weeks • 35-45 Hours",
+            recommendedPricingTier: parsed.recommendedPricingTier || "$2,500 – $5,000",
+            executiveSummary: parsed.executiveSummary || briefText.slice(0, 160),
+            goals: parsed.goals || [],
+            deliverables: parsed.deliverables || [],
+            requirements: parsed.requirements || [],
+            timeline: parsed.timeline || [],
+            redFlags: parsed.redFlags || [],
+            clarifyingQuestions: parsed.clarifyingQuestions || [],
+          };
+        }
+      }
+    } catch (err) {
+      console.warn("Gemini Brief Interpreter API notice:", err);
+    }
+  }
 
   const lower = briefText.toLowerCase();
 

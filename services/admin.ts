@@ -128,7 +128,7 @@ export async function fetchAdminKPIs(): Promise<AdminKPIs> {
     fetchLiveRooms(),
   ]);
 
-  let totalVolumeCents = 31300; // Seed default ($313.00)
+  let totalVolumeCents = 0;
   try {
     const { fetchPaymentHistory } = await import("./payments");
     const transactions = await fetchPaymentHistory();
@@ -139,26 +139,34 @@ export async function fetchAdminKPIs(): Promise<AdminKPIs> {
   } catch {}
 
   const sb = getSupabase();
-  let totalProfiles = 142;
-  let verifiedCount = 38;
+  let totalProfiles = 0;
+  let activeCreatives = 0;
+  let verifiedCount = 0;
+  let openJobs = 0;
 
   if (sb) {
     try {
-      const { count } = await sb.from("profiles").select("*", { count: "exact", head: true });
-      if (count && count > 0) totalProfiles = count;
+      const [profRes, creatRes, jobRes] = await Promise.all([
+        sb.from("profiles").select("*", { count: "exact", head: true }),
+        sb.from("profiles").select("*", { count: "exact", head: true }).eq("role", "creative"),
+        sb.from("jobs").select("*", { count: "exact", head: true }),
+      ]);
+      if (profRes.count !== null && profRes.count !== undefined) totalProfiles = profRes.count;
+      if (creatRes.count !== null && creatRes.count !== undefined) activeCreatives = creatRes.count;
+      if (jobRes.count !== null && jobRes.count !== undefined) openJobs = jobRes.count;
     } catch {}
   }
 
   return {
     totalMembers: totalProfiles,
-    activeCreatives: Math.round(totalProfiles * 0.78),
+    activeCreatives: activeCreatives || totalProfiles,
     verifiedCreators: verifiedCount,
     activeAudioRooms: rooms.length,
-    openJobs: 14,
+    openJobs,
     totalEvents: eventStats.totalEvents,
     ticketsIssued: eventStats.totalTicketsIssued,
     checkedInCount: eventStats.checkedInCount,
-    marketplaceItemsClaimed: 89,
+    marketplaceItemsClaimed: 0,
     estimatedPlatformGrossVolume: `$${(totalVolumeCents / 100).toLocaleString()}`,
   };
 }

@@ -11,6 +11,7 @@ import {
     Alert,
     Dimensions,
     Modal,
+    Platform,
     Pressable,
     ScrollView,
     Share,
@@ -276,9 +277,9 @@ export default function JobDetail() {
 
             {/* Bottom Bar */}
             <View style={styles.bottomBar}>
-                {hasRole("business", "admin") && (
+                {hasRole("business", "admin") ? (
                     <Pressable
-                        style={styles.reviewApplicantsBtn}
+                        style={[styles.applyBtn, { backgroundColor: "#6C5CE7", flex: 1 }]}
                         onPress={() => {
                             if (id) {
                                 setLoadingApplicants(true);
@@ -289,39 +290,64 @@ export default function JobDetail() {
                             setApplicantsModalVisible(true);
                         }}
                     >
-                        <MaterialIcons name="people" size={18} color={colors.accentYellow} />
-                        <Text style={styles.reviewApplicantsBtnText}>
-                            Applicants ({applicants.length})
+                        <MaterialIcons name="people" size={20} color="#fff" />
+                        <Text style={[styles.applyText, { color: "#fff" }]}>
+                            Review Applicants ({applicants.length})
+                        </Text>
+                    </Pressable>
+                ) : hasRole("creative") ? (
+                    <Pressable
+                        style={[
+                            styles.applyBtn,
+                            applied && styles.applyBtnDone,
+                        ]}
+                        onPress={() => {
+                            if (applied) {
+                                Alert.alert(
+                                    "Application Submitted",
+                                    "Your application has been received and is currently under review by the hiring team."
+                                );
+                            } else {
+                                setApplyModalVisible(true);
+                            }
+                        }}
+                    >
+                        <MaterialIcons
+                            name={applied ? "check-circle" : "send"}
+                            size={20}
+                            color={applied ? "#fff" : colors.textDark}
+                        />
+                        <Text style={[styles.applyText, applied && styles.applyTextDone]}>
+                            {applied ? "Application Sent" : "Apply with Portfolio"}
+                        </Text>
+                    </Pressable>
+                ) : (
+                    <Pressable
+                        style={[styles.applyBtn, { backgroundColor: "#1e1e1e", borderWidth: 1, borderColor: colors.outline }]}
+                        onPress={() => {
+                            if (Platform.OS === "web") {
+                                const ok = typeof window !== "undefined" ? window.confirm(
+                                    "Applying to jobs requires a Creative persona. Would you like to switch your persona to Creative?"
+                                ) : false;
+                                if (ok) router.push("/onboarding/identity" as any);
+                                return;
+                            }
+                            Alert.alert(
+                                "Creative Account Required",
+                                "Applying to design gigs and studio briefs requires a Creative persona. Switch your persona to submit applications.",
+                                [
+                                    { text: "Cancel", style: "cancel" },
+                                    { text: "Switch Persona", onPress: () => router.push("/onboarding/identity" as any) },
+                                ]
+                            );
+                        }}
+                    >
+                        <MaterialIcons name="lock-outline" size={18} color={colors.textSecondary} />
+                        <Text style={[styles.applyText, { color: colors.textSecondary }]}>
+                            Apply (Creative Persona Required)
                         </Text>
                     </Pressable>
                 )}
-
-                <Pressable
-                    style={[
-                        styles.applyBtn,
-                        applied && styles.applyBtnDone,
-                        hasRole("business", "admin") && { flex: 1.2 },
-                    ]}
-                    onPress={() => {
-                        if (applied) {
-                            Alert.alert(
-                                "Application Submitted",
-                                "Your application has been received and is currently under review by the hiring team."
-                            );
-                        } else {
-                            setApplyModalVisible(true);
-                        }
-                    }}
-                >
-                    <MaterialIcons
-                        name={applied ? "check-circle" : "send"}
-                        size={20}
-                        color={applied ? "#fff" : colors.textDark}
-                    />
-                    <Text style={[styles.applyText, applied && styles.applyTextDone]}>
-                        {applied ? "Application Sent" : "Apply Now"}
-                    </Text>
-                </Pressable>
             </View>
 
             {/* ── Application Submission Sheet Modal ── */}

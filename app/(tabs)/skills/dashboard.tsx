@@ -19,9 +19,9 @@ export default function SkillsDashboard() {
     : require("../../../assets/images/react-logo.png");
 
   const [stats, setStats] = useState<Stat[]>([
-    { label: "Learning Streak", value: "14", suffix: "Days" },
-    { label: "Courses Completed", value: "2" },
-    { label: "Ai Tools Used This Week", value: "4" },
+    { label: "Learning Streak", value: "0", suffix: "Days" },
+    { label: "Courses Completed", value: "0" },
+    { label: "Ai Tools Used This Week", value: "0" },
   ]);
   const [courses, setCourses] = useState<Course[]>([]);
 

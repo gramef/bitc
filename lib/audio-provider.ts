@@ -97,27 +97,28 @@ async function fetchToken(
   const sb = getSupabase();
   const baseUrl = getSupabaseUrl();
 
-  // 1. Try Supabase Edge Function if authenticated session exists
+  // 1. Try Supabase Edge Function
   if (sb && baseUrl) {
-    const { data: sessionData } = await sb.auth.getSession();
-    const accessToken = sessionData?.session?.access_token;
-    if (accessToken) {
-      try {
+    try {
+      const { data: sessionData } = await sb.auth.getSession();
+      const authToken = sessionData?.session?.access_token || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+      if (authToken) {
         const res = await fetch(`${baseUrl}/functions/v1/livekit-token`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`,
+            apikey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "",
+            Authorization: `Bearer ${authToken}`,
           },
-          body: JSON.stringify({ roomName, identity, name, canPublish: true }),
+          body: JSON.stringify({ roomName, identity, name, canPublish }),
         });
         if (res.ok) {
           const { token } = await res.json();
           if (token) return token;
         }
-      } catch (err) {
-        console.warn("Edge function token fetch error, using fallback:", err);
       }
+    } catch (err) {
+      console.warn("Edge function token fetch error, using fallback:", err);
     }
   }
 

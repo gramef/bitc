@@ -33,79 +33,6 @@ export type Conversation = {
 
 const MESSAGES_STORAGE_KEY = "@bitc_direct_messages";
 
-const SEED_CONVERSATIONS: Conversation[] = [
-  {
-    id: "conv_kofi",
-    participant_id: "usr_201",
-    participant_name: "Kofi Mensah",
-    participant_avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
-    participant_role: "Lead Product Designer at Monzo",
-    last_message: "Hey! Loved your mobile case study. Are you open for contract UI roles starting next month?",
-    last_message_time: "10:42 AM",
-    unread_count: 1,
-  },
-  {
-    id: "conv_sophie",
-    participant_id: "usr_103",
-    participant_name: "Sophie Tremblay",
-    participant_avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80",
-    participant_role: "Creative Director",
-    last_message: "See you at the London Brunch networking this weekend! Don't forget your portfolio deck.",
-    last_message_time: "Yesterday",
-    unread_count: 0,
-  },
-  {
-    id: "conv_amara",
-    participant_id: "usr_101",
-    participant_name: "Amara Okafor",
-    participant_avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
-    participant_role: "Brand Identity Lead",
-    last_message: "Thanks for the feedback on the typography lockup. That spacing fix worked perfectly!",
-    last_message_time: "Sep 7",
-    unread_count: 0,
-  },
-];
-
-const SEED_MESSAGES: Record<string, DirectMessage[]> = {
-  conv_kofi: [
-    {
-      id: "m_1",
-      conversation_id: "conv_kofi",
-      sender_id: "usr_201",
-      sender_name: "Kofi Mensah",
-      sender_avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
-      recipient_id: "me",
-      text: "Hi there! I noticed your recent portfolio project featured in the Skills Vault.",
-      created_at: "10:35 AM",
-      read: true,
-    },
-    {
-      id: "m_2",
-      conversation_id: "conv_kofi",
-      sender_id: "usr_201",
-      sender_name: "Kofi Mensah",
-      sender_avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
-      recipient_id: "me",
-      text: "Hey! Loved your mobile case study. Are you open for contract UI roles starting next month?",
-      created_at: "10:42 AM",
-      read: false,
-    },
-  ],
-  conv_sophie: [
-    {
-      id: "m_3",
-      conversation_id: "conv_sophie",
-      sender_id: "usr_103",
-      sender_name: "Sophie Tremblay",
-      sender_avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80",
-      recipient_id: "me",
-      text: "See you at the London Brunch networking this weekend! Don't forget your portfolio deck.",
-      created_at: "Yesterday",
-      read: true,
-    },
-  ],
-};
-
 async function getStoredState(): Promise<{
   conversations: Conversation[];
   messages: Record<string, DirectMessage[]>;
@@ -113,13 +40,11 @@ async function getStoredState(): Promise<{
   try {
     const raw = await AsyncStorage.getItem(MESSAGES_STORAGE_KEY);
     if (!raw) {
-      const initial = { conversations: SEED_CONVERSATIONS, messages: SEED_MESSAGES };
-      await AsyncStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(initial));
-      return initial;
+      return { conversations: [], messages: {} };
     }
     return JSON.parse(raw);
   } catch {
-    return { conversations: SEED_CONVERSATIONS, messages: SEED_MESSAGES };
+    return { conversations: [], messages: {} };
   }
 }
 

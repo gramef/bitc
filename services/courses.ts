@@ -270,19 +270,19 @@ export async function fetchLearningStats(): Promise<{
   }
 
   // Calculate streak based on last study date
-  let streak = 14;
+  let streak = 0;
   try {
     const lastStudied = await AsyncStorage.getItem(LAST_STUDIED_KEY);
     if (lastStudied) {
       const diffHours = (Date.now() - new Date(lastStudied).getTime()) / (1000 * 60 * 60);
       if (diffHours < 36) {
-        streak = 15;
+        streak = 1;
       }
     }
   } catch {}
 
   // Fetch AI tools used count
-  let aiToolsUsed = 4;
+  let aiToolsUsed = 0;
   try {
     const { fetchAiToolsUsedCount } = await import("@/services/ai");
     aiToolsUsed = await fetchAiToolsUsedCount();
@@ -290,7 +290,7 @@ export async function fetchLearningStats(): Promise<{
 
   return {
     learningStreakDays: streak,
-    coursesCompletedCount: Math.max(coursesCompletedCount, 2), // Default historical completed courses
+    coursesCompletedCount,
     aiToolsUsedThisWeek: aiToolsUsed,
     totalLessonsCompleted,
   };

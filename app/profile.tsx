@@ -10,12 +10,18 @@ import React, { useEffect, useState } from "react";
 import { Alert, Modal, Platform, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
 
 
-type Tab = "Posts" | "Portfolio" | "Reviews";
+import { EventRow, fetchMyTickets, MyTicketWithEvent } from "@/services/events";
+import { JobRow } from "@/services/jobs";
+
+type Tab = "Posts" | "Portfolio" | "Reviews" | "Open Roles" | "Events";
 
 export default function UserProfile() {
   const router = useRouter();
   const { profile: authProfile, signOut, refreshProfile } = useAuth();
-  const [tab, setTab] = useState<Tab>("Posts");
+  const role = authProfile?.role ?? "creative";
+  const [tab, setTab] = useState<Tab>(
+    role === "business" ? "Open Roles" : role === "user" ? "Events" : "Portfolio"
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [fullName, setFullName] = useState("Guest");
   const [bio, setBio] = useState<string | null>(null);
@@ -30,6 +36,8 @@ export default function UserProfile() {
   >([]);
   const [portfolio, setPortfolio] = useState<{ id: string; title: string; image_url: string | null; created_at: string | null }[]>([]);
   const [reviews, setReviews] = useState<{ id: string; rating: number; text: string; created_at: string | null }[]>([]);
+  const [myJobs, setMyJobs] = useState<JobRow[]>([]);
+  const [myTickets, setMyTickets] = useState<MyTicketWithEvent[]>([]);
   const [liked, setLiked] = useState<Record<string, boolean>>({});
   const [commentModal, setCommentModal] = useState(false);
   const [commentText, setCommentText] = useState("");
@@ -48,11 +56,36 @@ export default function UserProfile() {
     setFullName(p.fullName);
     setBio(p.bio);
     if (p.avatarUrl) setAvatarSrc({ uri: p.avatarUrl });
-    setStats([
-      { label: "Projects", value: String(p.projectsCount ?? 0), active: false },
-      { label: "Followers", value: String(p.followersCount ?? 0), active: false },
-      { label: "Ratings", value: String(p.rating ?? 0), active: false },
-    ]);
+    const currentRole = authProfile?.role ?? "creative";
+    if (currentRole === "business") {
+      const { fetchJobs } = await import("@/services/jobs");
+      const allJobs = await fetchJobs(50);
+      const filteredJobs = allJobs.filter(
+        (j) => j.user_id === authProfile?.id || (j as any).created_by === authProfile?.id || (p.fullName && p.fullName !== "Guest" && j.org.toLowerCase() === p.fullName.toLowerCase())
+      );
+      setMyJobs(filteredJobs);
+      setStats([
+        { label: "Open Roles", value: String(filteredJobs.length), active: true },
+        { label: "Followers", value: String(p.followersCount ?? 0), active: false },
+        { label: "Rating", value: p.rating > 0 ? p.rating.toFixed(1) : "—", active: false },
+      ]);
+    } else if (currentRole === "user") {
+      const tickets = await fetchMyTickets();
+      setMyTickets(tickets);
+      setStats([
+        { label: "Brunches", value: String(tickets.length), active: true },
+        { label: "Following", value: String(p.followersCount ?? 0), active: false },
+        { label: "Passes", value: String(tickets.filter((t) => t.status === "valid").length), active: false },
+      ]);
+    } else {
+      const pItems = await fetchMyPortfolio();
+      setPortfolio(pItems);
+      setStats([
+        { label: "Projects", value: String(pItems.length || p.projectsCount || 0), active: true },
+        { label: "Followers", value: String(p.followersCount ?? 0), active: false },
+        { label: "Ratings", value: p.rating > 0 ? p.rating.toFixed(1) : "—", active: false },
+      ]);
+    }
     const list = await fetchMyPosts();
     setPosts(list);
     const ids = list.map((p) => p.id);
@@ -284,18 +317,430 @@ export default function UserProfile() {
           ))}
         </View>
 
-        <View style={styles.tabsRow}>
-          {(["Posts", "Portfolio", "Reviews"] as Tab[]).map((t) => (
-            <Pressable key={t} onPress={() => setTab(t)} style={styles.tabBtn} hitSlop={6}>
-              <Text style={[styles.tabText, tab === t ? styles.tabTextActive : styles.tabTextInactive]}>
-                {t}
-              </Text>
-              {tab === t ? <View style={styles.tabUnderline} /> : null}
-            </Pressable>
-          ))}
-        </View>
+        {/* Dynamic Persona-Tailored Tabs */}
+        {(() => {
+          const availableTabs: Tab[] =
+            role === "business"
+              ? ["Open Roles", "Posts", "Reviews"]
+              : role === "user"
+              ? ["Events", "Posts", "Reviews"]
+              : ["Portfolio", "Posts", "Reviews"];
 
-        {tab === "Posts" ? (
+          return (
+            <View style={styles.tabsRow}>
+              {availableTabs.map((t) => (
+                <Pressable
+                  key={t}
+                  onPress={() => setTab(t)}
+                  style={styles.tabBtn}
+                  hitSlop={6}
+                >
+                  <Text
+                    style={[
+                      styles.tabText,
+                      tab === t ? styles.tabTextActive : styles.tabTextInactive,
+                    ]}
+                  >
+                    {t}
+                  </Text>
+                  {tab === t ? <View style={styles.tabUnderline} /> : null}
+                </Pressable>
+              ))}
+            </View>
+          );
+        })()}
+
+        {tab === "Open Roles" ? (
+          <View style={styles.list}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: spacing.sm,
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontFamily: fonts.semibold,
+                  fontSize: fonts.size.sm,
+                }}
+              >
+                Studio Open Roles ({myJobs.length})
+              </Text>
+              <Pressable
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                  backgroundColor: colors.accentYellow,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: radii.pill,
+                }}
+                onPress={() => router.push("/create-job" as any)}
+              >
+                <MaterialIcons name="add" size={16} color={colors.textDark} />
+                <Text
+                  style={{
+                    color: colors.textDark,
+                    fontFamily: fonts.bold,
+                    fontSize: fonts.size.xs,
+                  }}
+                >
+                  Post a Job
+                </Text>
+              </Pressable>
+            </View>
+
+            {myJobs.length === 0 ? (
+              <View
+                style={[
+                  styles.postCard,
+                  { alignItems: "center", paddingVertical: spacing.xl },
+                ]}
+              >
+                <MaterialIcons
+                  name="business-center"
+                  size={40}
+                  color={colors.textSecondary}
+                  style={{ marginBottom: spacing.sm }}
+                />
+                <Text
+                  style={[
+                    styles.postText,
+                    { textAlign: "center", marginBottom: spacing.xs },
+                  ]}
+                >
+                  No active job briefs yet
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontFamily: fonts.regular,
+                    fontSize: fonts.size.sm,
+                    textAlign: "center",
+                    marginBottom: spacing.md,
+                  }}
+                >
+                  Publish freelance gigs, full-time contracts, and design briefs to hire verified talent.
+                </Text>
+                <Pressable
+                  style={{
+                    backgroundColor: colors.accentYellow,
+                    paddingHorizontal: 20,
+                    paddingVertical: 10,
+                    borderRadius: radii.pill,
+                  }}
+                  onPress={() => router.push("/create-job" as any)}
+                >
+                  <Text
+                    style={{
+                      color: colors.textDark,
+                      fontFamily: fonts.bold,
+                      fontSize: fonts.size.sm,
+                    }}
+                  >
+                    + Post a Job Opportunity
+                  </Text>
+                </Pressable>
+              </View>
+            ) : (
+              myJobs.map((j) => (
+                <Pressable
+                  key={j.id}
+                  onPress={() => router.push(`/job-detail?id=${j.id}` as any)}
+                  style={styles.postCard}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text
+                        style={[
+                          styles.postText,
+                          { fontFamily: fonts.bold, fontSize: fonts.size.md },
+                        ]}
+                      >
+                        {j.title}
+                      </Text>
+                      <Text
+                        style={{
+                          color: colors.textSecondary,
+                          fontFamily: fonts.regular,
+                          fontSize: fonts.size.xs,
+                        }}
+                      >
+                        {j.org} · {j.location || "Remote"}
+                      </Text>
+                    </View>
+                    <View
+                      style={{
+                        backgroundColor: "#6C5CE720",
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        borderRadius: 6,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: "#6C5CE7",
+                          fontFamily: fonts.bold,
+                          fontSize: 10,
+                        }}
+                      >
+                        ACTIVE BRIEF
+                      </Text>
+                    </View>
+                  </View>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginTop: spacing.md,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: colors.accentYellow,
+                        fontFamily: fonts.semibold,
+                        fontSize: fonts.size.sm,
+                      }}
+                    >
+                      {j.salary || j.type || "Contract"}
+                    </Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                    >
+                      <MaterialIcons
+                        name="people"
+                        size={16}
+                        color={colors.textSecondary}
+                      />
+                      <Text
+                        style={{
+                          color: colors.textSecondary,
+                          fontFamily: fonts.regular,
+                          fontSize: fonts.size.xs,
+                        }}
+                      >
+                        Review Applicants →
+                      </Text>
+                    </View>
+                  </View>
+                </Pressable>
+              ))
+            )}
+          </View>
+        ) : tab === "Events" ? (
+          <View style={styles.list}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: spacing.sm,
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontFamily: fonts.semibold,
+                  fontSize: fonts.size.sm,
+                }}
+              >
+                My Weekend Brunches & Passes ({myTickets.length})
+              </Text>
+              <Pressable
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                  backgroundColor: colors.accentYellow,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: radii.pill,
+                }}
+                onPress={() => router.push("/(tabs)/events")}
+              >
+                <MaterialIcons name="search" size={16} color={colors.textDark} />
+                <Text
+                  style={{
+                    color: colors.textDark,
+                    fontFamily: fonts.bold,
+                    fontSize: fonts.size.xs,
+                  }}
+                >
+                  Find Brunches
+                </Text>
+              </Pressable>
+            </View>
+
+            {myTickets.length === 0 ? (
+              <View
+                style={[
+                  styles.postCard,
+                  { alignItems: "center", paddingVertical: spacing.xl },
+                ]}
+              >
+                <MaterialIcons
+                  name="local-activity"
+                  size={40}
+                  color={colors.textSecondary}
+                  style={{ marginBottom: spacing.sm }}
+                />
+                <Text
+                  style={[
+                    styles.postText,
+                    { textAlign: "center", marginBottom: spacing.xs },
+                  ]}
+                >
+                  No brunch passes yet
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontFamily: fonts.regular,
+                    fontSize: fonts.size.sm,
+                    textAlign: "center",
+                    marginBottom: spacing.md,
+                  }}
+                >
+                  Discover weekend brunches, networking mixers, and live audio rooms in your city.
+                </Text>
+                <Pressable
+                  style={{
+                    backgroundColor: colors.accentYellow,
+                    paddingHorizontal: 20,
+                    paddingVertical: 10,
+                    borderRadius: radii.pill,
+                  }}
+                  onPress={() => router.push("/(tabs)/events")}
+                >
+                  <Text
+                    style={{
+                      color: colors.textDark,
+                      fontFamily: fonts.bold,
+                      fontSize: fonts.size.sm,
+                    }}
+                  >
+                    Explore Upcoming Brunches
+                  </Text>
+                </Pressable>
+              </View>
+            ) : (
+              myTickets.map((tkt) => (
+                <Pressable
+                  key={tkt.id}
+                  onPress={() => router.push(`/event-detail?id=${tkt.event_id}` as any)}
+                  style={styles.postCard}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text
+                        style={[
+                          styles.postText,
+                          { fontFamily: fonts.bold, fontSize: fonts.size.md },
+                        ]}
+                      >
+                        {tkt.event_title || "BITC Brunch Event"}
+                      </Text>
+                      <Text
+                        style={{
+                          color: colors.textSecondary,
+                          fontFamily: fonts.regular,
+                          fontSize: fonts.size.xs,
+                        }}
+                      >
+                        {tkt.event_city || "London"} ·{" "}
+                        {tkt.event_date
+                          ? new Date(tkt.event_date).toLocaleDateString("en-GB", {
+                              month: "short",
+                              day: "numeric",
+                            })
+                          : "Upcoming"}
+                      </Text>
+                    </View>
+                    <View
+                      style={{
+                        backgroundColor: tkt.status === "checked_in" ? "#6C5CE720" : "#00B89420",
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        borderRadius: 6,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: tkt.status === "checked_in" ? "#6C5CE7" : "#00B894",
+                          fontFamily: fonts.bold,
+                          fontSize: 10,
+                        }}
+                      >
+                        {tkt.status === "checked_in" ? "CHECKED IN" : "CONFIRMED PASS"}
+                      </Text>
+                    </View>
+                  </View>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginTop: spacing.md,
+                    }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                    >
+                      <MaterialIcons
+                        name="qr-code"
+                        size={16}
+                        color={colors.accentYellow}
+                      />
+                      <Text
+                        style={{
+                          color: colors.accentYellow,
+                          fontFamily: fonts.semibold,
+                          fontSize: fonts.size.xs,
+                        }}
+                      >
+                        {tkt.ticket_code}
+                      </Text>
+                    </View>
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontFamily: fonts.regular,
+                        fontSize: fonts.size.xs,
+                      }}
+                    >
+                      Details →
+                    </Text>
+                  </View>
+                </Pressable>
+              ))
+            )}
+          </View>
+        ) : tab === "Posts" ? (
           <View style={styles.list}>
             {posts.length === 0 ? (
               <View style={styles.postCard}>

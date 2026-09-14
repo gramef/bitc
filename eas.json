@@ -19,8 +19,16 @@
             "distribution": "internal"
         },
         "production": {
+            "env": {
+                "EXPO_PUBLIC_SUPABASE_URL": "https://npnsqtczakdpdxdzzurr.supabase.co",
+                "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_20nfyOimUZJUEqXw4bcyZQ_HduTGmQ2",
+                "EXPO_PUBLIC_LIVEKIT_URL": "wss://bitc-ds602hco.livekit.cloud"
+            },
             "android": {
                 "buildType": "app-bundle"
+            },
+            "ios": {
+                "simulator": false
             }
         }
     },

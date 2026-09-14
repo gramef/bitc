@@ -3,6 +3,7 @@ import { EmptyState, SearchBar } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { EventRow, fetchEvents } from "@/services/events";
 import { fetchJobs, JobRow } from "@/services/jobs";
+import { getRoleBadge } from "@/services/permissions";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
@@ -33,6 +34,8 @@ export default function Home() {
   const router = useRouter();
 
   const { profile } = useAuth();
+  const role = profile?.role ?? "creative";
+  const badge = getRoleBadge(role);
   const profileName = profile?.fullName ?? "Guest";
   const firstName = profileName.split(" ")[0];
   const avatarSrc = profile?.avatarUrl
@@ -89,7 +92,6 @@ export default function Home() {
             refreshing={refreshing}
             onRefresh={onRefresh}
             tintColor={colors.accentYellow}
-
           />
         }
       >
@@ -101,7 +103,34 @@ export default function Home() {
             </View>
             <View>
               <Text style={styles.topGreeting}>{getGreeting()} 👋</Text>
-              <Text style={styles.topName}>{firstName}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 }}>
+                <Text style={styles.topName}>{firstName}</Text>
+                {badge && (
+                  <View
+                    style={{
+                      backgroundColor: badge.bgColor,
+                      paddingHorizontal: 8,
+                      paddingVertical: 2,
+                      borderRadius: 10,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
+                    <MaterialIcons name={badge.icon as any} size={11} color={badge.color} />
+                    <Text
+                      style={{
+                        color: badge.color,
+                        fontFamily: fonts.bold,
+                        fontSize: 9,
+                        letterSpacing: 0.5,
+                      }}
+                    >
+                      {badge.label.toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
           </Pressable>
           <View style={styles.topRight}>
@@ -120,6 +149,108 @@ export default function Home() {
         <View style={styles.searchWrap}>
           <SearchBar value={search} onChangeText={setSearch} placeholder="Search events, jobs, people…" />
         </View>
+
+        {/* ── Persona Tailored Focus Card ── */}
+        {(() => {
+          if (role === "business") {
+            return (
+              <View style={[styles.personaCardWrap, { borderColor: "#6C5CE750" }]}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View style={[styles.personaIconBox, { backgroundColor: "#6C5CE725" }]}>
+                    <MaterialIcons name="business" size={24} color="#6C5CE7" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.personaCardTitle}>Studio Hiring Hub</Text>
+                    <Text style={styles.personaCardSub}>
+                      Post open briefs & contracts to hire top verified creative talent.
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.personaBtnRow}>
+                  <Pressable
+                    style={[styles.personaPrimaryBtn, { backgroundColor: "#6C5CE7" }]}
+                    onPress={() => router.push("/create-job" as any)}
+                  >
+                    <MaterialIcons name="add" size={16} color="#fff" />
+                    <Text style={[styles.personaPrimaryBtnText, { color: "#fff" }]}>Post a Job</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.personaSecondaryBtn}
+                    onPress={() => router.push("/create-event" as any)}
+                  >
+                    <MaterialIcons name="event" size={16} color={colors.textPrimary} />
+                    <Text style={styles.personaSecondaryBtnText}>Host Summit</Text>
+                  </Pressable>
+                </View>
+              </View>
+            );
+          } else if (role === "user") {
+            return (
+              <View style={[styles.personaCardWrap, { borderColor: "#FDCB6E50" }]}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View style={[styles.personaIconBox, { backgroundColor: "#FDCB6E25" }]}>
+                    <MaterialIcons name="local-activity" size={24} color="#FDCB6E" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.personaCardTitle}>Weekend Brunches & Passes</Text>
+                    <Text style={styles.personaCardSub}>
+                      Discover upcoming networking brunches, mixers & tune into live rooms.
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.personaBtnRow}>
+                  <Pressable
+                    style={[styles.personaPrimaryBtn, { backgroundColor: "#D6B226" }]}
+                    onPress={() => router.push("/(tabs)/events")}
+                  >
+                    <MaterialIcons name="search" size={16} color="#141414" />
+                    <Text style={[styles.personaPrimaryBtnText, { color: "#141414" }]}>Find Brunches</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.personaSecondaryBtn}
+                    onPress={() => router.push("/rooms")}
+                  >
+                    <MaterialIcons name="mic" size={16} color={colors.textPrimary} />
+                    <Text style={styles.personaSecondaryBtnText}>Join Audio Rooms</Text>
+                  </Pressable>
+                </View>
+              </View>
+            );
+          } else {
+            // Creative persona
+            return (
+              <View style={[styles.personaCardWrap, { borderColor: "#00B89450" }]}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View style={[styles.personaIconBox, { backgroundColor: "#00B89425" }]}>
+                    <MaterialIcons name="brush" size={24} color="#00B894" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.personaCardTitle}>Creative Showcase Hub</Text>
+                    <Text style={styles.personaCardSub}>
+                      Add case studies to your portfolio & run an AI review to win studio briefs.
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.personaBtnRow}>
+                  <Pressable
+                    style={[styles.personaPrimaryBtn, { backgroundColor: "#00B894" }]}
+                    onPress={() => router.push("/profile" as any)}
+                  >
+                    <MaterialIcons name="add" size={16} color="#141414" />
+                    <Text style={[styles.personaPrimaryBtnText, { color: "#141414" }]}>+ Add Project</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.personaSecondaryBtn}
+                    onPress={() => router.push("/skills/tools/portfolio-review-upload" as any)}
+                  >
+                    <MaterialIcons name="auto-awesome" size={16} color={colors.textPrimary} />
+                    <Text style={styles.personaSecondaryBtnText}>AI Review</Text>
+                  </Pressable>
+                </View>
+              </View>
+            );
+          }
+        })()}
 
         {/* ── Quick Actions ── */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
@@ -398,4 +529,66 @@ const styles = StyleSheet.create({
   },
   exploreIcon: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   exploreLabel: { flex: 1, color: colors.textPrimary, fontFamily: fonts.semibold, fontSize: fonts.size.md },
+
+  /* ── Persona Focus Card ── */
+  personaCardWrap: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.card,
+    borderWidth: 1.5,
+    padding: spacing.md,
+    gap: spacing.sm,
+    marginTop: 2,
+  },
+  personaIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  personaCardTitle: {
+    color: colors.textPrimary,
+    fontFamily: fonts.bold,
+    fontSize: 15,
+  },
+  personaCardSub: {
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 2,
+  },
+  personaBtnRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 4,
+  },
+  personaPrimaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radii.pill,
+  },
+  personaPrimaryBtnText: {
+    fontFamily: fonts.bold,
+    fontSize: 12,
+  },
+  personaSecondaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: colors.outline,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radii.pill,
+  },
+  personaSecondaryBtnText: {
+    color: colors.textPrimary,
+    fontFamily: fonts.semibold,
+    fontSize: 12,
+  },
 });

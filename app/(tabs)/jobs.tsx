@@ -2,6 +2,7 @@ import SafeScreen from "@/components/SafeScreen";
 import { Chip, EmptyState, SearchBar } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { fetchJobs, JobRow } from "@/services/jobs";
+import { getRoleBadge } from "@/services/permissions";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
@@ -23,6 +24,8 @@ export default function Jobs() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { profile, hasRole } = useAuth();
+  const role = profile?.role ?? "creative";
+  const badge = getRoleBadge(role);
   const avatarSrc = profile?.avatarUrl
     ? { uri: profile.avatarUrl }
     : require("../../assets/images/react-logo.png");
@@ -102,7 +105,16 @@ export default function Jobs() {
             </View>
             <View>
               <Text style={styles.topGreeting}>Good day,</Text>
-              <Text style={styles.topName}>{profile?.fullName ?? "Guest"}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 1 }}>
+                <Text style={styles.topName}>{profile?.fullName ?? "Guest"}</Text>
+                {badge && (
+                  <View style={{ backgroundColor: badge.bgColor, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8 }}>
+                    <Text style={{ color: badge.color, fontFamily: fonts.bold, fontSize: 9 }}>
+                      {badge.label.toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
           </View>
           <Pressable style={styles.filterBtn} hitSlop={6} onPress={() => router.push("/filter")}>
@@ -110,7 +122,143 @@ export default function Jobs() {
           </Pressable>
         </View>
 
-        <Text style={styles.pageTitle}>Jobs</Text>
+        <Text style={styles.pageTitle}>Jobs & Opportunities</Text>
+
+        {/* Role-tailored Banner */}
+        {(() => {
+          if (role === "business" || role === "admin") {
+            return (
+              <View
+                style={{
+                  backgroundColor: "#6C5CE718",
+                  borderColor: "#6C5CE740",
+                  borderWidth: 1,
+                  borderRadius: radii.md,
+                  padding: spacing.md,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                }}
+              >
+                <MaterialIcons name="business" size={24} color="#6C5CE7" />
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fonts.bold,
+                      fontSize: 13,
+                    }}
+                  >
+                    Studio Hiring Dashboard
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontFamily: fonts.regular,
+                      fontSize: 11,
+                      marginTop: 2,
+                    }}
+                  >
+                    Tap the{" "}
+                    <Text style={{ color: colors.accentYellow, fontFamily: fonts.bold }}>
+                      + button
+                    </Text>{" "}
+                    below to post a new job opportunity or freelance brief.
+                  </Text>
+                </View>
+                <Pressable
+                  style={{
+                    backgroundColor: "#6C5CE7",
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: radii.pill,
+                  }}
+                  onPress={() => router.push("/create-job" as any)}
+                >
+                  <Text style={{ color: "#fff", fontFamily: fonts.bold, fontSize: 11 }}>
+                    + Post
+                  </Text>
+                </Pressable>
+              </View>
+            );
+          } else if (role === "creative") {
+            return (
+              <View
+                style={{
+                  backgroundColor: "#00B89418",
+                  borderColor: "#00B89440",
+                  borderWidth: 1,
+                  borderRadius: radii.md,
+                  padding: spacing.md,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                }}
+              >
+                <MaterialIcons name="brush" size={24} color="#00B894" />
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fonts.bold,
+                      fontSize: 13,
+                    }}
+                  >
+                    Apply with Case Studies
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontFamily: fonts.regular,
+                      fontSize: 11,
+                      marginTop: 2,
+                    }}
+                  >
+                    Your verified BITC portfolio and reviews are attached automatically when you apply.
+                  </Text>
+                </View>
+              </View>
+            );
+          } else {
+            return (
+              <View
+                style={{
+                  backgroundColor: "#FDCB6E18",
+                  borderColor: "#FDCB6E40",
+                  borderWidth: 1,
+                  borderRadius: radii.md,
+                  padding: spacing.md,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                }}
+              >
+                <MaterialIcons name="explore" size={24} color="#FDCB6E" />
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fonts.bold,
+                      fontSize: 13,
+                    }}
+                  >
+                    Explore Industry Opportunities
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontFamily: fonts.regular,
+                      fontSize: 11,
+                      marginTop: 2,
+                    }}
+                  >
+                    Discover opportunities posted across partner studios, agencies, and brands.
+                  </Text>
+                </View>
+              </View>
+            );
+          }
+        })()}
 
         <SearchBar value={search} onChangeText={setSearch} placeholder="Search jobs…" />
 

@@ -1,4 +1,5 @@
 import { getSupabase } from "@/lib/supabase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type EventRow = {
   id: string;
@@ -55,6 +56,24 @@ export async function registerForEvent(
     const userId = userRes.user.id;
     const ticketCode = generateTicketCode();
 
+    const newTicket: EventTicket = {
+        id: "tkt_" + Date.now(),
+        event_id: eventId,
+        user_id: userId,
+        ticket_code: ticketCode,
+        status: "valid",
+        created_at: new Date().toISOString(),
+    };
+
+    // Always persist to local cache so user never loses their ticket
+    try {
+        const key = `@bitc_my_tickets_${userId}`;
+        const raw = await AsyncStorage.getItem(key);
+        const existing: EventTicket[] = raw ? JSON.parse(raw) : [];
+        existing.unshift(newTicket);
+        await AsyncStorage.setItem(key, JSON.stringify(existing));
+    } catch {}
+
     try {
         const { data, error } = await sb
             .from("event_tickets")
@@ -67,33 +86,21 @@ export async function registerForEvent(
             .select()
             .single();
 
-        if (error) {
-            console.warn("event_tickets table notice:", error.message);
-            return {
-                ok: true,
-                ticket: {
-                    id: "tkt_" + Date.now(),
-                    event_id: eventId,
-                    user_id: userId,
-                    ticket_code: ticketCode,
-                    status: "valid",
-                    created_at: new Date().toISOString(),
-                },
-            };
-        }
-        return { ok: true, ticket: data as EventTicket };
+        const finalTicket = (error || !data) ? newTicket : (data as EventTicket);
+
+        // Trigger local pass confirmation notification
+        import("@/services/notifications").then((m) => {
+            m.sendTicketConfirmedNotification("Weekend Brunch Mixer", finalTicket.ticket_code);
+        });
+
+        return { ok: true, ticket: finalTicket };
     } catch {
-        return {
-            ok: true,
-            ticket: {
-                id: "tkt_" + Date.now(),
-                event_id: eventId,
-                user_id: userId,
-                ticket_code: ticketCode,
-                status: "valid",
-                created_at: new Date().toISOString(),
-            },
-        };
+        // Trigger local pass confirmation notification
+        import("@/services/notifications").then((m) => {
+            m.sendTicketConfirmedNotification("Weekend Brunch Mixer", newTicket.ticket_code);
+        });
+
+        return { ok: true, ticket: newTicket };
     }
 }
 
@@ -103,20 +110,95 @@ export async function fetchMyEventTicket(eventId: string): Promise<EventTicket |
 
     const { data: userRes } = await sb.auth.getUser();
     if (!userRes?.user?.id) return null;
+    const userId = userRes.user.id;
 
     try {
         const { data, error } = await sb
             .from("event_tickets")
             .select("*")
             .eq("event_id", eventId)
-            .eq("user_id", userRes.user.id)
+            .eq("user_id", userId)
             .maybeSingle();
 
-        if (error || !data) return null;
-        return data as EventTicket;
-    } catch {
-        return null;
-    }
+        if (data && !error) return data as EventTicket;
+    } catch {}
+
+    // Check local storage
+    try {
+        const key = `@bitc_my_tickets_${userId}`;
+        const raw = await AsyncStorage.getItem(key);
+        if (raw) {
+            const list: EventTicket[] = JSON.parse(raw);
+            const found = list.find((t) => t.event_id === eventId);
+            if (found) return found;
+        }
+    } catch {}
+
+    return null;
+}
+
+export type MyTicketWithEvent = EventTicket & {
+    event_title?: string;
+    event_city?: string | null;
+    event_date?: string | null;
+    image_url?: string | null;
+};
+
+export async function fetchMyTickets(): Promise<MyTicketWithEvent[]> {
+    const sb = getSupabase();
+    if (!sb) return [];
+
+    const { data: userRes } = await sb.auth.getUser();
+    if (!userRes?.user?.id) return [];
+    const userId = userRes.user.id;
+
+    try {
+        const { data, error } = await sb
+            .from("event_tickets")
+            .select(`
+                id, event_id, user_id, ticket_code, status, created_at,
+                events (id, title, city, event_date, image_url)
+            `)
+            .eq("user_id", userId)
+            .order("created_at", { ascending: false });
+
+        if (!error && data && data.length > 0) {
+            return (data as any[]).map((row) => ({
+                id: row.id,
+                event_id: row.event_id,
+                user_id: row.user_id,
+                ticket_code: row.ticket_code,
+                status: row.status,
+                created_at: row.created_at,
+                event_title: row.events?.title || "BITC Brunch Event",
+                event_city: row.events?.city || "London",
+                event_date: row.events?.event_date || row.created_at,
+                image_url: row.events?.image_url || null,
+            }));
+        }
+    } catch {}
+
+    // Local storage fallback with live event details lookup
+    try {
+        const key = `@bitc_my_tickets_${userId}`;
+        const raw = await AsyncStorage.getItem(key);
+        if (raw) {
+            const list: EventTicket[] = JSON.parse(raw);
+            const allEvents = await fetchEvents(50);
+            return list.map((t) => {
+                const ev = allEvents.find((e) => e.id === t.event_id);
+                return {
+                    ...t,
+                    event_title: ev?.title || "BITC Brunch Event",
+                    event_city: ev?.city || "London",
+                    event_date: ev?.event_date || t.created_at,
+                    image_url: ev?.image_url || null,
+                };
+            });
+        }
+    } catch {}
+
+    return [];
 }
 
 export type AttendeeTicket = EventTicket & {
@@ -126,76 +208,12 @@ export type AttendeeTicket = EventTicket & {
     checked_in_at?: string | null;
 };
 
-const SEED_ROSTER: Record<string, AttendeeTicket[]> = {
-    default: [
-        {
-            id: "tkt_001",
-            event_id: "evt_1",
-            user_id: "usr_101",
-            ticket_code: "BITC-BRNC-7291",
-            status: "checked_in",
-            created_at: "2026-09-01T10:00:00Z",
-            attendee_name: "Amara Okafor",
-            attendee_avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
-            attendee_role: "Brand Identity Lead",
-            checked_in_at: "2026-09-09T11:15:00Z",
-        },
-        {
-            id: "tkt_002",
-            event_id: "evt_1",
-            user_id: "usr_102",
-            ticket_code: "BITC-DSGN-4819",
-            status: "valid",
-            created_at: "2026-09-03T14:20:00Z",
-            attendee_name: "Devon Clark",
-            attendee_avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
-            attendee_role: "UI/UX Designer",
-        },
-        {
-            id: "tkt_003",
-            event_id: "evt_1",
-            user_id: "usr_103",
-            ticket_code: "BITC-LOND-8821",
-            status: "valid",
-            created_at: "2026-09-04T09:10:00Z",
-            attendee_name: "Sophie Tremblay",
-            attendee_avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80",
-            attendee_role: "Creative Director",
-        },
-        {
-            id: "tkt_004",
-            event_id: "evt_1",
-            user_id: "usr_104",
-            ticket_code: "BITC-VIP-3310",
-            status: "valid",
-            created_at: "2026-09-05T16:45:00Z",
-            attendee_name: "Marcus Vance",
-            attendee_avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
-            attendee_role: "Product Strategist",
-        },
-        {
-            id: "tkt_005",
-            event_id: "evt_1",
-            user_id: "usr_105",
-            ticket_code: "BITC-TECH-9912",
-            status: "checked_in",
-            created_at: "2026-09-06T11:00:00Z",
-            attendee_name: "Tasha Williams",
-            attendee_avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=200&q=80",
-            attendee_role: "Motion & 3D Artist",
-            checked_in_at: "2026-09-09T11:30:00Z",
-        },
-    ],
-};
-
-let localRosterState: AttendeeTicket[] = [...SEED_ROSTER.default];
-
 /**
  * Fetch attendee roster for a specific event (Admin)
  */
 export async function fetchEventRoster(eventId: string): Promise<AttendeeTicket[]> {
     const sb = getSupabase();
-    if (!sb) return localRosterState;
+    if (!sb) return [];
 
     try {
         const { data, error } = await sb
@@ -207,7 +225,7 @@ export async function fetchEventRoster(eventId: string): Promise<AttendeeTicket[
             .eq("event_id", eventId);
 
         if (error || !data || data.length === 0) {
-            return localRosterState;
+            return [];
         }
 
         return data.map((d: any) => ({
@@ -222,7 +240,7 @@ export async function fetchEventRoster(eventId: string): Promise<AttendeeTicket[
             attendee_role: d.profiles?.role || "Creative",
         }));
     } catch {
-        return localRosterState;
+        return [];
     }
 }
 
@@ -233,33 +251,8 @@ export async function checkInTicket(
     ticketCode: string
 ): Promise<{ ok: boolean; ticket?: AttendeeTicket; message: string }> {
     const normalizedCode = ticketCode.trim().toUpperCase();
-
-    // Check local roster state
-    const index = localRosterState.findIndex((t) => t.ticket_code.toUpperCase() === normalizedCode);
-    if (index !== -1) {
-        if (localRosterState[index].status === "checked_in") {
-            return {
-                ok: false,
-                ticket: localRosterState[index],
-                message: `⚠️ Ticket ${normalizedCode} was already checked in at ${localRosterState[index].checked_in_at || "earlier today"}!`,
-            };
-        }
-
-        localRosterState[index] = {
-            ...localRosterState[index],
-            status: "checked_in",
-            checked_in_at: new Date().toLocaleTimeString(),
-        };
-
-        return {
-            ok: true,
-            ticket: localRosterState[index],
-            message: `✓ Success! Welcome, ${localRosterState[index].attendee_name}!`,
-        };
-    }
-
-    // Try Supabase
     const sb = getSupabase();
+
     if (sb) {
         try {
             const { data, error } = await sb
@@ -292,7 +285,6 @@ export async function checkInTicket(
                     attendee_role: data.profiles?.role || "Creative",
                     checked_in_at: new Date().toLocaleTimeString(),
                 };
-                localRosterState.unshift(attendee);
                 return {
                     ok: true,
                     ticket: attendee,
@@ -309,7 +301,7 @@ export async function checkInTicket(
 }
 
 /**
- * Fetch overall event stats for Admin KPI Center
+ * Fetch overall event stats for Admin KPI Center (calculates from real data)
  */
 export async function fetchAllEventStats(): Promise<{
     totalEvents: number;
@@ -318,12 +310,24 @@ export async function fetchAllEventStats(): Promise<{
     checkInRatePercent: number;
 }> {
     const events = await fetchEvents(50);
-    const totalIssued = 48 + localRosterState.length;
-    const checkedIn = localRosterState.filter((t) => t.status === "checked_in").length + 28;
-    const checkInRatePercent = Math.round((checkedIn / totalIssued) * 100);
+    const sb = getSupabase();
+    let totalIssued = 0;
+    let checkedIn = 0;
+
+    if (sb) {
+        try {
+            const { data } = await sb.from("event_tickets").select("id, status");
+            if (data && data.length > 0) {
+                totalIssued = data.length;
+                checkedIn = data.filter((t: any) => t.status === "checked_in").length;
+            }
+        } catch {}
+    }
+
+    const checkInRatePercent = totalIssued > 0 ? Math.round((checkedIn / totalIssued) * 100) : 0;
 
     return {
-        totalEvents: Math.max(events.length, 3),
+        totalEvents: events.length,
         totalTicketsIssued: totalIssued,
         checkedInCount: checkedIn,
         checkInRatePercent,

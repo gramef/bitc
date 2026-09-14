@@ -7,6 +7,7 @@ import {
 } from "@/services/events";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
@@ -14,6 +15,8 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -33,11 +36,14 @@ export default function AdminEvents() {
   const [searchQuery, setSearchQuery] = useState("");
   const [scanCodeInput, setScanCodeInput] = useState("");
   const [checkingIn, setCheckingIn] = useState(false);
+  const [cameraModalVisible, setCameraModalVisible] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanned, setScanned] = useState(false);
   const [stats, setStats] = useState({
-    totalEvents: 3,
-    totalTicketsIssued: 53,
-    checkedInCount: 30,
-    checkInRatePercent: 57,
+    totalEvents: 0,
+    totalTicketsIssued: 0,
+    checkedInCount: 0,
+    checkInRatePercent: 0,
   });
 
   const loadData = useCallback(async () => {
@@ -144,11 +150,78 @@ export default function AdminEvents() {
             {checkingIn ? (
               <ActivityIndicator color={colors.textDark} size="small" />
             ) : (
-              <Text style={styles.scannerSubmitText}>Check In Guest</Text>
+              <Text style={styles.scannerSubmitText}>Check In</Text>
             )}
+          </Pressable>
+          <Pressable
+            style={styles.cameraTriggerBtn}
+            onPress={async () => {
+              if (Platform.OS === "web") {
+                const code = typeof window !== "undefined" ? window.prompt("Enter or scan ticket barcode:") : null;
+                if (code) handleQuickCheckIn(code);
+                return;
+              }
+              if (!permission?.granted) {
+                const res = await requestPermission();
+                if (!res.granted) {
+                  Alert.alert("Camera Permission Required", "Please allow camera access to scan attendee QR passes.");
+                  return;
+                }
+              }
+              setScanned(false);
+              setCameraModalVisible(true);
+            }}
+          >
+            <MaterialIcons name="photo-camera" size={18} color={colors.textDark} />
+            <Text style={styles.cameraTriggerText}>Scan QR</Text>
           </Pressable>
         </View>
       </View>
+
+      {/* Camera QR Scanner Modal */}
+      <Modal visible={cameraModalVisible} animationType="slide" transparent>
+        <View style={styles.cameraOverlay}>
+          <View style={styles.cameraContainer}>
+            <View style={styles.cameraHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <MaterialIcons name="qr-code-scanner" size={20} color={colors.accentYellow} />
+                <Text style={styles.cameraHeaderTitle}>Door Ticket Scanner</Text>
+              </View>
+              <Pressable
+                style={styles.cameraCloseBtn}
+                onPress={() => setCameraModalVisible(false)}
+                hitSlop={8}
+              >
+                <MaterialIcons name="close" size={20} color="#fff" />
+              </Pressable>
+            </View>
+
+            <View style={styles.cameraViewport}>
+              <CameraView
+                style={StyleSheet.absoluteFillObject}
+                barcodeScannerSettings={{
+                  barcodeTypes: ["qr"],
+                }}
+                onBarcodeScanned={scanned ? undefined : ({ data }) => {
+                  setScanned(true);
+                  setCameraModalVisible(false);
+                  handleQuickCheckIn(data);
+                }}
+              />
+              <View style={styles.reticleWrap}>
+                <View style={styles.reticle} />
+                <Text style={styles.reticleHelp}>Align guest ticket QR code within frame</Text>
+              </View>
+            </View>
+
+            <View style={styles.cameraFooter}>
+              <Text style={styles.cameraFooterText}>
+                Supported formats: Scannable BITC Ticket Passes & QR codes
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Attendance Stats Cards */}
       <View style={styles.statsGrid}>
@@ -396,4 +469,87 @@ const styles = StyleSheet.create({
   },
   checkInBtnText: { color: colors.textDark, fontFamily: fonts.bold, fontSize: fonts.size.xs },
   checkedInTimeText: { color: colors.textMuted, fontFamily: fonts.regular, fontSize: 10 },
+  cameraTriggerBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#00B894",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: radii.pill,
+    justifyContent: "center",
+  },
+  cameraTriggerText: { color: colors.textDark, fontFamily: fonts.bold, fontSize: fonts.size.xs },
+  cameraOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.md,
+  },
+  cameraContainer: {
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: colors.surface,
+    borderRadius: radii.card,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: colors.outline,
+  },
+  cameraHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: spacing.md,
+    backgroundColor: "#161616",
+    borderBottomWidth: 1,
+    borderBottomColor: colors.outline,
+  },
+  cameraHeaderTitle: { color: colors.textPrimary, fontFamily: fonts.bold, fontSize: fonts.size.md },
+  cameraCloseBtn: {
+    padding: 4,
+    borderRadius: 6,
+    backgroundColor: "#2a2a2a",
+  },
+  cameraViewport: {
+    width: "100%",
+    height: 320,
+    backgroundColor: "#000",
+    position: "relative",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  reticleWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  reticle: {
+    width: 200,
+    height: 200,
+    borderWidth: 2,
+    borderColor: colors.accentYellow,
+    borderRadius: 16,
+    backgroundColor: "rgba(214, 178, 38, 0.05)",
+  },
+  reticleHelp: {
+    color: "#fff",
+    fontFamily: fonts.semibold,
+    fontSize: 12,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  cameraFooter: {
+    padding: spacing.md,
+    backgroundColor: "#161616",
+    alignItems: "center",
+  },
+  cameraFooterText: {
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    textAlign: "center",
+  },
 });

@@ -146,9 +146,7 @@ export async function fetchPaymentHistory(): Promise<PaymentTransaction[]> {
     }
   }
 
-  // Fallback to initial seeds
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_TRANSACTIONS));
-  return SEED_TRANSACTIONS;
+  return [];
 }
 
 /**
@@ -234,4 +232,18 @@ export async function processPayment({
   } catch (err: any) {
     return { ok: false, error: err?.message || "Payment processing failed." };
   }
+}
+
+/**
+ * Returns whether live Stripe credentials are configured in the environment
+ */
+export function isStripeConfigured(): boolean {
+  return Boolean(
+    process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY &&
+    process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY.startsWith("pk_")
+  );
+}
+
+export function getStripePublishableKey(): string | null {
+  return process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || null;
 }
