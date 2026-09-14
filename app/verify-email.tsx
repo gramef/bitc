@@ -49,8 +49,9 @@ export default function VerifyEmailScreen() {
   /**
    * Submits the 6-digit confirmation code via Supabase verifyOtp
    */
-  async function handleVerifyCode() {
-    const cleanCode = code.replace(/\D/g, "");
+  async function handleVerifyCode(overrideCode?: string) {
+    const raw = overrideCode || code;
+    const cleanCode = raw.replace(/\D/g, "").slice(0, 6);
     if (cleanCode.length < 6) {
       setError("Please enter the complete 6-digit verification code");
       return;
@@ -201,7 +202,7 @@ export default function VerifyEmailScreen() {
       if (resendErr) {
         setError(resendErr.message || "Failed to resend verification code.");
       } else {
-        setMessage(`Verification code resent to ${targetEmail}. Please check your inbox!`);
+        setMessage(`A fresh 6-digit verification code was resent to ${targetEmail}. Please check your inbox!`);
         setResendCooldown(60);
       }
     } catch (e: any) {
@@ -210,8 +211,6 @@ export default function VerifyEmailScreen() {
       setResending(false);
     }
   }
-
-  const digits = (code + "      ").slice(0, 6).split("");
 
   return (
     <SafeScreen>
@@ -234,41 +233,48 @@ export default function VerifyEmailScreen() {
             <Text style={styles.emailHighlight}>{email || "your email address"}</Text>
           </Text>
 
-          {/* 6-Digit Code Display */}
-          <Pressable
-            style={styles.codeContainer}
-            onPress={() => inputRef.current?.focus()}
-            hitSlop={10}
-          >
-            {digits.map((digit, idx) => {
-              const isFilled = digit.trim().length > 0;
-              const isCurrent = idx === Math.min(code.length, 5);
-              return (
-                <View
-                  key={idx}
-                  style={[
-                    styles.digitBox,
-                    isFilled && styles.digitBoxFilled,
-                    isCurrent && styles.digitBoxActive,
-                  ]}
-                >
-                  <Text style={styles.digitText}>{digit.trim() || ""}</Text>
-                </View>
-              );
-            })}
-          </Pressable>
+          {/* Strictly 6-Digit Code Display with Overlaid Input */}
+          <View style={styles.codeWrapper}>
+            <View style={styles.codeContainer} pointerEvents="none">
+              {[0, 1, 2, 3, 4, 5].map((idx) => {
+                const char = code[idx] || "";
+                const isFilled = char.length > 0;
+                const isCurrent = idx === Math.min(code.length, 5) && !verifying;
+                return (
+                  <View
+                    key={idx}
+                    style={[
+                      styles.digitBox,
+                      isFilled && styles.digitBoxFilled,
+                      isCurrent && styles.digitBoxActive,
+                    ]}
+                  >
+                    <Text style={styles.digitText}>{char}</Text>
+                  </View>
+                );
+              })}
+            </View>
 
-          {/* Hidden Text Input for native keyboard interaction */}
-          <TextInput
-            ref={inputRef}
-            value={code}
-            onChangeText={(val) => setCode(val.replace(/\D/g, "").slice(0, 6))}
-            keyboardType="number-pad"
-            maxLength={6}
-            autoFocus
-            style={styles.hiddenInput}
-            testID="verification-code-input"
-          />
+            {/* Hidden Text Input strictly overlaid across the 6 boxes */}
+            <TextInput
+              ref={inputRef}
+              value={code}
+              onChangeText={(val) => {
+                const clean = val.replace(/\D/g, "").slice(0, 6);
+                setCode(clean);
+                if (clean.length === 6) {
+                  handleVerifyCode(clean);
+                }
+              }}
+              keyboardType="number-pad"
+              textContentType="oneTimeCode"
+              autoComplete="one-time-code"
+              maxLength={6}
+              autoFocus
+              style={styles.hiddenInput}
+              testID="verification-code-input"
+            />
+          </View>
 
           {error ? (
             <View style={styles.alertBoxError}>
@@ -382,16 +388,23 @@ const styles = StyleSheet.create({
     color: colors.accentYellow,
     fontFamily: fonts.semibold,
   },
+  codeWrapper: {
+    position: "relative",
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.lg,
+  },
   codeContainer: {
     flexDirection: "row",
     gap: 8,
-    marginBottom: spacing.lg,
     justifyContent: "center",
+    alignItems: "center",
     width: "100%",
   },
   digitBox: {
-    width: 46,
-    height: 56,
+    width: 48,
+    height: 58,
     borderRadius: 12,
     backgroundColor: colors.surface,
     borderWidth: 1.5,
@@ -401,6 +414,7 @@ const styles = StyleSheet.create({
   },
   digitBoxActive: {
     borderColor: colors.accentYellow,
+    backgroundColor: "#1C1A14",
   },
   digitBoxFilled: {
     borderColor: "#EAD05480",
@@ -409,13 +423,19 @@ const styles = StyleSheet.create({
   digitText: {
     color: colors.textPrimary,
     fontFamily: fonts.bold,
-    fontSize: 22,
+    fontSize: 24,
   },
   hiddenInput: {
     position: "absolute",
-    opacity: 0,
-    width: 1,
-    height: 1,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: "100%",
+    height: "100%",
+    opacity: 0.0001,
+    color: "transparent",
+    backgroundColor: "transparent",
   },
   alertBoxError: {
     flexDirection: "row",
