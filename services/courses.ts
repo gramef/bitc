@@ -5,6 +5,7 @@
  * lesson completion tracking with real progress percentage calculation.
  */
 
+import { getSupabase } from "@/lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type Lesson = {
@@ -32,10 +33,22 @@ export type Course = {
   lessons: Lesson[];
   requirements: string[];
   reviews: { name: string; role: string; rating: number; comment: string }[];
+  authorId?: string;
+  authorName?: string;
+  isEnrolled?: boolean;
+  createdAt?: string;
 };
 
-const COURSE_PROGRESS_KEY = "@bitc_course_completed_lessons";
+const CUSTOM_COURSES_KEY = "@bitc_custom_courses";
 const LAST_STUDIED_KEY = "@bitc_course_last_studied_date";
+
+function getUserProgressKey(userId?: string): string {
+  return userId ? `@bitc_course_progress_${userId}` : "@bitc_course_completed_lessons_guest";
+}
+
+function getUserEnrollmentsKey(userId?: string): string {
+  return userId ? `@bitc_enrolled_courses_${userId}` : "@bitc_enrolled_courses_guest";
+}
 
 const BASE_COURSES: Course[] = [
   {
@@ -163,25 +176,13 @@ const BASE_COURSES: Course[] = [
 ];
 
 /**
- * Get map of completed lesson IDs from storage
+ * Get map of completed lesson IDs from storage for a specific user
  */
-async function getCompletedLessonIds(): Promise<Record<string, boolean>> {
+async function getCompletedLessonIds(userId?: string): Promise<Record<string, boolean>> {
   try {
-    const raw = await AsyncStorage.getItem(COURSE_PROGRESS_KEY);
-    if (!raw) {
-      // Seed with initial realistic progress: c1 has 4 lessons done, c2 has 3 lessons done
-      const seed: Record<string, boolean> = {
-        "c1-l1": true,
-        "c1-l2": true,
-        "c1-l3": true,
-        "c1-l4": true,
-        "c2-l1": true,
-        "c2-l2": true,
-        "c2-l3": true,
-      };
-      await AsyncStorage.setItem(COURSE_PROGRESS_KEY, JSON.stringify(seed));
-      return seed;
-    }
+    const key = getUserProgressKey(userId);
+    const raw = await AsyncStorage.getItem(key);
+    if (!raw) return {};
     return JSON.parse(raw);
   } catch {
     return {};
@@ -189,45 +190,244 @@ async function getCompletedLessonIds(): Promise<Record<string, boolean>> {
 }
 
 /**
- * Fetch all courses populated with user's real progress
+ * Get enrolled course IDs for a specific user
  */
-export async function fetchCourses(): Promise<Course[]> {
-  const completedMap = await getCompletedLessonIds();
+export async function getUserEnrolledCourseIds(userId?: string): Promise<string[]> {
+  const localKey = getUserEnrollmentsKey(userId);
+  let localEnrolled: string[] = [];
+  try {
+    const raw = await AsyncStorage.getItem(localKey);
+    if (raw) localEnrolled = JSON.parse(raw);
+  } catch {}
 
-  return BASE_COURSES.map((course) => {
+  const sb = getSupabase();
+  if (sb && userId) {
+    try {
+      const { data, error } = await sb
+        .from("course_enrollments")
+        .select("course_id")
+        .eq("user_id", userId);
+      if (!error && data && Array.isArray(data)) {
+        const cloudIds = data.map((r: any) => String(r.course_id));
+        const merged = Array.from(new Set([...localEnrolled, ...cloudIds]));
+        return merged;
+      }
+    } catch {}
+  }
+  return localEnrolled;
+}
+
+/**
+ * Enroll user in a course
+ */
+export async function enrollInCourse(courseId: string, userId?: string): Promise<boolean> {
+  const localKey = getUserEnrollmentsKey(userId);
+  let enrolled: string[] = [];
+  try {
+    const raw = await AsyncStorage.getItem(localKey);
+    if (raw) enrolled = JSON.parse(raw);
+  } catch {}
+
+  if (!enrolled.includes(courseId)) {
+    enrolled.push(courseId);
+    await AsyncStorage.setItem(localKey, JSON.stringify(enrolled));
+  }
+
+  const sb = getSupabase();
+  if (sb && userId) {
+    try {
+      await sb.from("course_enrollments").upsert(
+        {
+          user_id: userId,
+          course_id: courseId,
+          progress: 0,
+          status: "in_progress",
+          last_accessed_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,course_id" }
+      );
+    } catch {}
+  }
+
+  return true;
+}
+
+/**
+ * Unenroll user from a course
+ */
+export async function unenrollFromCourse(courseId: string, userId?: string): Promise<boolean> {
+  const localKey = getUserEnrollmentsKey(userId);
+  let enrolled: string[] = [];
+  try {
+    const raw = await AsyncStorage.getItem(localKey);
+    if (raw) enrolled = JSON.parse(raw);
+  } catch {}
+
+  enrolled = enrolled.filter((id) => id !== courseId);
+  await AsyncStorage.setItem(localKey, JSON.stringify(enrolled));
+
+  const sb = getSupabase();
+  if (sb && userId) {
+    try {
+      await sb.from("course_enrollments").delete().eq("user_id", userId).eq("course_id", courseId);
+    } catch {}
+  }
+
+  return true;
+}
+
+/**
+ * Create and publish a course (for Business/Studio & Admin accounts)
+ */
+export async function createCourse(
+  courseInput: {
+    title: string;
+    category: string;
+    level: "Beginner" | "Intermediate" | "Advanced";
+    duration: string;
+    summary: string;
+    imageUri?: string | null;
+    bullets: string[];
+    requirements: string[];
+    lessons: { title: string; duration: string; summary: string; module?: string }[];
+  },
+  authorId: string,
+  authorName: string
+): Promise<Course> {
+  const courseId = `course_${Date.now()}`;
+  const modulesList = Array.from(
+    new Set(courseInput.lessons.map((l) => l.module || "Module 1: Course Core"))
+  );
+
+  const formattedLessons: Lesson[] = courseInput.lessons.map((l, idx) => ({
+    id: `${courseId}-l${idx + 1}`,
+    title: l.title.trim(),
+    duration: l.duration.trim() || "15 mins",
+    module: l.module || "Module 1: Course Core",
+    summary: l.summary.trim() || "Comprehensive practical lesson walkthrough.",
+    completed: false,
+  }));
+
+  const newCourse: Course = {
+    id: courseId,
+    title: courseInput.title.trim(),
+    lessonsCount: formattedLessons.length,
+    duration:
+      courseInput.duration.trim() ||
+      `${Math.max(1, Math.round(formattedLessons.length * 0.4))} Hours`,
+    level: courseInput.level,
+    rating: "5.0",
+    category: courseInput.category || "Creative Direction",
+    progressPercent: 0,
+    image: courseInput.imageUri
+      ? { uri: courseInput.imageUri }
+      : require("../images/Rectangle 93.png"),
+    summary: courseInput.summary.trim(),
+    bullets: courseInput.bullets.filter(Boolean),
+    modules: modulesList.length > 0 ? modulesList : ["Module 1: Course Core"],
+    lessons: formattedLessons,
+    requirements: courseInput.requirements.filter(Boolean),
+    reviews: [
+      {
+        name: authorName,
+        role: "Studio Instructor",
+        rating: 5,
+        comment: "Official masterclass provided for the BITC Creative Network.",
+      },
+    ],
+    authorId,
+    authorName,
+    isEnrolled: false,
+    createdAt: new Date().toISOString(),
+  };
+
+  // 1. Save to custom courses in storage
+  let customList: Course[] = [];
+  try {
+    const raw = await AsyncStorage.getItem(CUSTOM_COURSES_KEY);
+    if (raw) customList = JSON.parse(raw);
+  } catch {}
+  customList.unshift(newCourse);
+  await AsyncStorage.setItem(CUSTOM_COURSES_KEY, JSON.stringify(customList));
+
+  // 2. Try saving to Supabase courses table
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      await sb.from("courses").insert({
+        id: courseId,
+        title: newCourse.title,
+        category: newCourse.category,
+        level: newCourse.level,
+        duration: newCourse.duration,
+        summary: newCourse.summary,
+        author_id: authorId,
+        author_name: authorName,
+        lessons_count: newCourse.lessonsCount,
+        image_url: courseInput.imageUri ?? null,
+      });
+    } catch {}
+  }
+
+  return newCourse;
+}
+
+/**
+ * Fetch all courses populated with user's real progress and enrollment status
+ */
+export async function fetchCourses(userId?: string): Promise<Course[]> {
+  const completedMap = await getCompletedLessonIds(userId);
+  const enrolledIds = await getUserEnrolledCourseIds(userId);
+
+  // Load custom studio courses
+  let customCourses: Course[] = [];
+  try {
+    const raw = await AsyncStorage.getItem(CUSTOM_COURSES_KEY);
+    if (raw) customCourses = JSON.parse(raw);
+  } catch {}
+
+  const all = [...customCourses, ...BASE_COURSES];
+
+  return all.map((course) => {
+    const isEnrolled = enrolledIds.includes(course.id);
     const lessonsWithStatus = course.lessons.map((lesson) => ({
       ...lesson,
       completed: Boolean(completedMap[lesson.id]),
     }));
     const completedCount = lessonsWithStatus.filter((l) => l.completed).length;
-    const progressPercent = Math.round((completedCount / course.lessons.length) * 100);
+    const progressPercent =
+      course.lessons.length > 0
+        ? Math.round((completedCount / course.lessons.length) * 100)
+        : 0;
 
     return {
       ...course,
       lessons: lessonsWithStatus,
       lessonsCount: course.lessons.length,
       progressPercent,
+      isEnrolled,
     };
   });
 }
 
 /**
- * Fetch specific course by ID
+ * Fetch specific course by ID with user enrollment & progress context
  */
-export async function fetchCourseById(courseId: string): Promise<Course | null> {
-  const courses = await fetchCourses();
+export async function fetchCourseById(courseId: string, userId?: string): Promise<Course | null> {
+  const courses = await fetchCourses(userId);
   const found = courses.find((c) => c.id === courseId);
-  return found || courses[0]; // Fallback to first course if ID is generic
+  return found || courses[0];
 }
 
 /**
- * Toggle a lesson completed or uncompleted
+ * Toggle a lesson completed or uncompleted for a user
  */
 export async function toggleLessonCompleted(
   courseId: string,
-  lessonId: string
+  lessonId: string,
+  userId?: string
 ): Promise<{ course: Course; completed: boolean; progressPercent: number }> {
-  const completedMap = await getCompletedLessonIds();
+  const completedMap = await getCompletedLessonIds(userId);
   const currentStatus = Boolean(completedMap[lessonId]);
   const newStatus = !currentStatus;
 
@@ -237,10 +437,35 @@ export async function toggleLessonCompleted(
     delete completedMap[lessonId];
   }
 
-  await AsyncStorage.setItem(COURSE_PROGRESS_KEY, JSON.stringify(completedMap));
-  await AsyncStorage.setItem(LAST_STUDIED_KEY, new Date().toISOString());
+  // Auto-enroll if not already enrolled
+  await enrollInCourse(courseId, userId);
 
-  const updatedCourse = (await fetchCourseById(courseId))!;
+  const localKey = getUserProgressKey(userId);
+  await AsyncStorage.setItem(localKey, JSON.stringify(completedMap));
+  await AsyncStorage.setItem(
+    `${LAST_STUDIED_KEY}_${userId || "guest"}`,
+    new Date().toISOString()
+  );
+
+  const updatedCourse = (await fetchCourseById(courseId, userId))!;
+
+  // Sync to Supabase course_enrollments if available
+  const sb = getSupabase();
+  if (sb && userId) {
+    try {
+      await sb.from("course_enrollments").upsert(
+        {
+          user_id: userId,
+          course_id: courseId,
+          progress: updatedCourse.progressPercent,
+          status: updatedCourse.progressPercent === 100 ? "completed" : "in_progress",
+          last_accessed_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,course_id" }
+      );
+    } catch {}
+  }
+
   return {
     course: updatedCourse,
     completed: newStatus,
@@ -249,32 +474,38 @@ export async function toggleLessonCompleted(
 }
 
 /**
- * Fetch learning stats for Skills dashboard
+ * Fetch learning stats for Skills dashboard (strictly user-scoped)
  */
-export async function fetchLearningStats(): Promise<{
+export async function fetchLearningStats(userId?: string): Promise<{
   learningStreakDays: number;
   coursesCompletedCount: number;
   aiToolsUsedThisWeek: number;
   totalLessonsCompleted: number;
 }> {
-  const courses = await fetchCourses();
+  const courses = await fetchCourses(userId);
   let totalLessonsCompleted = 0;
   let coursesCompletedCount = 0;
 
+  // Only calculate for courses the user has actually enrolled in
   for (const c of courses) {
-    const done = c.lessons.filter((l) => l.completed).length;
-    totalLessonsCompleted += done;
-    if (c.progressPercent === 100) {
-      coursesCompletedCount++;
+    if (c.isEnrolled) {
+      const done = c.lessons.filter((l) => l.completed).length;
+      totalLessonsCompleted += done;
+      if (c.progressPercent === 100) {
+        coursesCompletedCount++;
+      }
     }
   }
 
-  // Calculate streak based on last study date
+  // Calculate streak based on user's last study date
   let streak = 0;
   try {
-    const lastStudied = await AsyncStorage.getItem(LAST_STUDIED_KEY);
+    const lastStudied = await AsyncStorage.getItem(
+      `${LAST_STUDIED_KEY}_${userId || "guest"}`
+    );
     if (lastStudied) {
-      const diffHours = (Date.now() - new Date(lastStudied).getTime()) / (1000 * 60 * 60);
+      const diffHours =
+        (Date.now() - new Date(lastStudied).getTime()) / (1000 * 60 * 60);
       if (diffHours < 36) {
         streak = 1;
       }

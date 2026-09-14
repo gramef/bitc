@@ -13,8 +13,9 @@ type Stat = { label: string; value: string; suffix?: string };
 
 export default function SkillsDashboard() {
   const router = useRouter();
-  const { profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const profileName = profile?.fullName ?? "Guest";
+  const isBusinessOrAdmin = profile?.role === "business" || profile?.role === "admin";
 
   const [stats, setStats] = useState<Stat[]>([
     { label: "Learning Streak", value: "0", suffix: "Days" },
@@ -27,19 +28,21 @@ export default function SkillsDashboard() {
     useCallback(() => {
       refreshProfile();
 
-      fetchCourses().then((data) => {
+      fetchCourses(user?.id).then((data) => {
         setCourses(data);
       });
 
-      fetchLearningStats().then((ls) => {
+      fetchLearningStats(user?.id).then((ls) => {
         setStats([
           { label: "Learning Streak", value: String(ls.learningStreakDays), suffix: "Days" },
           { label: "Courses Completed", value: String(ls.coursesCompletedCount) },
           { label: "Ai Tools Used This Week", value: String(ls.aiToolsUsedThisWeek) },
         ]);
       });
-    }, [refreshProfile])
+    }, [refreshProfile, user?.id])
   );
+
+  const enrolledCourses = courses.filter((c) => c.isEnrolled);
 
   const tools = [
     { name: "Portfolio Review", route: "/skills/tools/portfolio-review" },
@@ -67,13 +70,23 @@ export default function SkillsDashboard() {
             </View>
           </Pressable>
           <View style={styles.topActions}>
+            {isBusinessOrAdmin && (
+              <Pressable
+                style={[styles.topActionBtn, styles.topActionStudio]}
+                hitSlop={6}
+                onPress={() => router.push("/create-course" as any)}
+              >
+                <MaterialIcons name="add" size={20} color="#121212" />
+              </Pressable>
+            )}
             <Pressable style={[styles.topActionBtn, styles.topActionDark]} hitSlop={6}>
               <MaterialIcons name="language" size={18} color="#fff" />
             </Pressable>
-            <Pressable style={[styles.topActionBtn, styles.topActionDark]} hitSlop={6}>
-              <MaterialIcons name="search" size={18} color="#fff" />
-            </Pressable>
-            <Pressable style={[styles.topActionBtn, styles.topActionGreen]} hitSlop={6} onPress={() => router.push("/notifications")}>
+            <Pressable
+              style={[styles.topActionBtn, styles.topActionGreen]}
+              hitSlop={6}
+              onPress={() => router.push("/notifications")}
+            >
               <MaterialIcons name="notifications" size={18} color="#fff" />
             </Pressable>
           </View>
@@ -83,6 +96,29 @@ export default function SkillsDashboard() {
         <Text style={styles.pageSubtitle}>
           Ai-powered tools and learning resources to elevate your creative career faster. Unlock smart tools built to help you grow, create, and level up faster.
         </Text>
+
+        {/* Business Course Creator Banner */}
+        {isBusinessOrAdmin && (
+          <View style={styles.studioBanner}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <View style={styles.studioTag}>
+                <MaterialIcons name="business" size={12} color="#74B9FF" />
+                <Text style={styles.studioTagText}>BUSINESS & STUDIO</Text>
+              </View>
+              <Text style={styles.studioBannerTitle}>Publish Masterclasses</Text>
+              <Text style={styles.studioBannerDesc}>
+                Teach and educate the BITC creative community with your studio workflows.
+              </Text>
+            </View>
+            <Pressable
+              style={styles.studioBtn}
+              onPress={() => router.push("/create-course" as any)}
+              hitSlop={6}
+            >
+              <Text style={styles.studioBtnText}>+ Create</Text>
+            </Pressable>
+          </View>
+        )}
 
         <View style={styles.statsRow}>
           {stats.map((s, idx) => (
@@ -100,39 +136,71 @@ export default function SkillsDashboard() {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Progress Status</Text>
           <Pressable hitSlop={6} onPress={() => router.push("/skills/learn" as any)}>
-            <Text style={styles.sectionLink}>See all</Text>
+            <Text style={styles.sectionLink}>
+              {enrolledCourses.length > 0 ? "See all" : "Browse Courses"}
+            </Text>
           </Pressable>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.cardRow}>
-            {courses.map((c) => (
+
+        {enrolledCourses.length > 0 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.cardRow}>
+              {enrolledCourses.map((c) => (
+                <Pressable
+                  key={c.id}
+                  style={styles.courseCard}
+                  onPress={() => router.push(`/course/${c.id}`)}
+                  hitSlop={6}
+                >
+                  <Image source={c.image} style={styles.courseImage} contentFit="cover" />
+                  <View style={styles.courseBody}>
+                    <Text style={styles.courseTitle} numberOfLines={1}>
+                      {c.title}
+                    </Text>
+                    <View style={styles.courseMetaRow}>
+                      <MaterialIcons name="view-module" size={16} color={colors.textMuted} />
+                      <Text style={styles.courseMetaText}>{c.lessonsCount} Lessons</Text>
+                      <MaterialIcons
+                        name="schedule"
+                        size={16}
+                        color={colors.textMuted}
+                        style={{ marginLeft: spacing.md }}
+                      />
+                      <Text style={styles.courseMetaText}>{c.duration}</Text>
+                    </View>
+                    <View style={styles.progressLabelRow}>
+                      <Text style={styles.progressLabel}>Progress</Text>
+                      <Text style={styles.progressVal}>{c.progressPercent}%</Text>
+                    </View>
+                    <View style={styles.progressTrack}>
+                      <View style={[styles.progressFill, { width: `${c.progressPercent}%` }]} />
+                    </View>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          </ScrollView>
+        ) : (
+          <View style={styles.emptyProgressCard}>
+            <View style={styles.emptyIconWrap}>
+              <MaterialIcons name="school" size={26} color={colors.accentYellow} />
+            </View>
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={styles.emptyTitle}>No Courses in Progress</Text>
+              <Text style={styles.emptyDesc}>
+                You have not enrolled in any masterclasses yet. Explore courses to start building your creative skills.
+              </Text>
               <Pressable
-                key={c.id}
-                style={styles.courseCard}
-                onPress={() => router.push(`/course/${c.id}`)}
-                hitSlop={6}
+                style={styles.exploreBtn}
+                onPress={() => router.push("/skills/learn" as any)}
+                hitSlop={4}
               >
-                <Image source={c.image} style={styles.courseImage} contentFit="cover" />
-                <View style={styles.courseBody}>
-                  <Text style={styles.courseTitle}>{c.title}</Text>
-                  <View style={styles.courseMetaRow}>
-                    <MaterialIcons name="view-module" size={16} color={colors.textMuted} />
-                    <Text style={styles.courseMetaText}>{c.lessonsCount} Lessons</Text>
-                    <MaterialIcons name="schedule" size={16} color={colors.textMuted} style={{ marginLeft: spacing.md }} />
-                    <Text style={styles.courseMetaText}>{c.duration}</Text>
-                  </View>
-                  <View style={styles.progressLabelRow}>
-                    <Text style={styles.progressLabel}>Progress</Text>
-                    <Text style={styles.progressVal}>{c.progressPercent}%</Text>
-                  </View>
-                  <View style={styles.progressTrack}>
-                    <View style={[styles.progressFill, { width: `${c.progressPercent}%` }]} />
-                  </View>
-                </View>
+                <Text style={styles.exploreBtnText}>Browse Masterclasses</Text>
+                <MaterialIcons name="arrow-forward" size={14} color="#121212" />
               </Pressable>
-            ))}
+            </View>
           </View>
-        </ScrollView>
+        )}
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Quick Launch - Ai Tools</Text>
@@ -181,6 +249,99 @@ const styles = StyleSheet.create({
   topActionBtn: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   topActionDark: { backgroundColor: "#141414" },
   topActionGreen: { backgroundColor: colors.accentGreen },
+  topActionStudio: { backgroundColor: colors.accentYellow },
+  studioBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#161c24",
+    borderRadius: radii.card,
+    borderWidth: 1,
+    borderColor: "#74B9FF40",
+    padding: spacing.md,
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  studioTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  studioTagText: {
+    color: "#74B9FF",
+    fontFamily: fonts.bold,
+    fontSize: 10,
+    letterSpacing: 0.6,
+  },
+  studioBannerTitle: {
+    color: colors.textPrimary,
+    fontFamily: fonts.bold,
+    fontSize: fonts.size.sm,
+  },
+  studioBannerDesc: {
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+    fontSize: fonts.size.xs,
+    lineHeight: 16,
+  },
+  studioBtn: {
+    backgroundColor: colors.accentYellow,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: radii.pill,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  studioBtnText: {
+    color: "#121212",
+    fontFamily: fonts.bold,
+    fontSize: fonts.size.xs,
+  },
+  emptyProgressCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radii.card,
+    borderWidth: 1,
+    borderColor: colors.outline,
+    padding: spacing.md,
+    marginTop: spacing.xs,
+  },
+  emptyIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.accentYellow + "18",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyTitle: {
+    color: colors.textPrimary,
+    fontFamily: fonts.semibold,
+    fontSize: fonts.size.sm,
+  },
+  emptyDesc: {
+    color: colors.textSecondary,
+    fontFamily: fonts.regular,
+    fontSize: fonts.size.xs,
+    lineHeight: 18,
+  },
+  exploreBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.accentYellow,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 7,
+    borderRadius: radii.pill,
+    alignSelf: "flex-start",
+    marginTop: 6,
+  },
+  exploreBtnText: {
+    color: "#121212",
+    fontFamily: fonts.bold,
+    fontSize: fonts.size.xs,
+  },
   pageTitle: { color: colors.textPrimary, fontFamily: fonts.bold, fontSize: fonts.size.title, alignSelf: "center", marginTop: spacing.lg },
   pageSubtitle: {
     color: colors.textSecondary,

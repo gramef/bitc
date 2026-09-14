@@ -17,6 +17,7 @@ export interface RolePermissions {
   canClaimMarketplaceAsset: boolean;
   canBookMentorship: boolean;
   canOfferMentorship: boolean;
+  canCreateCourse: boolean;
 }
 
 export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
@@ -31,6 +32,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     canClaimMarketplaceAsset: true,
     canBookMentorship: true,
     canOfferMentorship: true,
+    canCreateCourse: true,
   },
   business: {
     canCreateEvent: true,        // Official Branded Events & Summits
@@ -43,6 +45,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     canClaimMarketplaceAsset: true,
     canBookMentorship: false,
     canOfferMentorship: false,
+    canCreateCourse: true,       // Publish studio masterclasses & courses
   },
   creative: {
     canCreateEvent: true,        // Community Meetups & Portfolio Walkthroughs
@@ -55,6 +58,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     canClaimMarketplaceAsset: true,
     canBookMentorship: true,     // Book mentors
     canOfferMentorship: true,    // Can be approved as a mentor
+    canCreateCourse: false,
   },
   user: {
     canCreateEvent: false,       // General attendees attend events & buy tickets
@@ -67,6 +71,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     canClaimMarketplaceAsset: true,
     canBookMentorship: true,
     canOfferMentorship: false,
+    canCreateCourse: false,
   },
 };
 

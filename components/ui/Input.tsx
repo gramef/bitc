@@ -10,6 +10,7 @@ type Props = {
   secureTextEntry?: boolean;
   showToggle?: boolean;
   multiline?: boolean;
+  numberOfLines?: number;
   style?: ViewStyle;
   keyboardType?: KeyboardTypeOptions;
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
@@ -22,6 +23,7 @@ export default function Input({
   secureTextEntry,
   showToggle,
   multiline,
+  numberOfLines,
   style,
   keyboardType,
   autoCapitalize,
@@ -37,6 +39,7 @@ export default function Input({
         placeholderTextColor="#9E9E9E"
         secureTextEntry={secureTextEntry ? hidden : false}
         multiline={multiline}
+        numberOfLines={numberOfLines}
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
       />
