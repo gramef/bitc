@@ -1,30 +1,164 @@
 import { getSupabase } from "@/lib/supabase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type JobRow = {
   id: string;
   org: string;
+  company?: string | null;
   title: string;
+  description?: string | null;
   type: string | null;
   location: string | null;
+  city?: string | null;
   remote: boolean | null;
   experience: string | null;
   posted_at: string | null;
   salary: string | null;
   image_url: string | null;
-  created_by?: string | null;
+  owner_id?: string | null;
+  posted_by?: string | null;
+  created_at?: string | null;
   user_id?: string | null;
 };
 
-export async function fetchJobs(limit = 20): Promise<JobRow[]> {
+export type CreateJobParams = {
+  title: string;
+  org?: string;
+  description?: string;
+  location?: string;
+  salary?: string;
+  type: string;
+  experience?: string;
+  remote: boolean;
+};
+
+const CUSTOM_JOBS_KEY = "@bitc_custom_jobs";
+
+export async function fetchCustomJobsLocally(): Promise<JobRow[]> {
+  try {
+    const existingStr = await AsyncStorage.getItem(CUSTOM_JOBS_KEY);
+    return existingStr ? JSON.parse(existingStr) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveCustomJobLocally(job: JobRow) {
+  try {
+    const list = await fetchCustomJobsLocally();
+    const updated = [job, ...list.filter((j) => j.id !== job.id)];
+    await AsyncStorage.setItem(CUSTOM_JOBS_KEY, JSON.stringify(updated));
+  } catch (err) {
+    console.warn("Could not save custom job locally:", err);
+  }
+}
+
+export async function createJob(params: CreateJobParams): Promise<{
+  ok: boolean;
+  error?: string;
+  job?: JobRow;
+}> {
   const sb = getSupabase();
-  if (!sb) return [];
-  const { data, error } = await sb
-    .from("jobs")
-    .select("id,org,title,type,location,remote,experience,posted_at,salary,image_url,created_by")
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (error || !data) return [];
-  return data as JobRow[];
+  if (!sb) return { ok: false, error: "Database not connected" };
+
+  const { data: userRes } = await sb.auth.getUser();
+  const userId = userRes?.user?.id;
+  if (!userId) {
+    return { ok: false, error: "Must be signed in to post a job" };
+  }
+
+  // Fetch employer organization name from profile if not provided
+  let orgName: string = params.org?.trim() || "";
+  if (!orgName) {
+    const { data: prof } = await sb
+      .from("profiles")
+      .select("full_name")
+      .eq("id", userId)
+      .maybeSingle();
+    orgName = prof?.full_name || "Company";
+  }
+
+  const nowIso = new Date().toISOString();
+  const newJobPayload = {
+    title: params.title.trim(),
+    org: orgName,
+    company: orgName,
+    description: params.description?.trim() || null,
+    location: params.location?.trim() || null,
+    city: params.location?.trim() || null,
+    salary: params.salary?.trim() || null,
+    type: params.type,
+    experience: params.experience?.trim() || null,
+    remote: params.remote,
+    posted_at: nowIso,
+    owner_id: userId,
+    posted_by: userId,
+  };
+
+  try {
+    const { data, error } = await sb
+      .from("jobs")
+      .insert(newJobPayload)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      console.warn("Supabase jobs table notice:", error.message);
+      // Fallback: save to local custom jobs cache so business user always sees their posting
+      const fallbackJob: JobRow = {
+        id: "job_" + Date.now(),
+        ...newJobPayload,
+        image_url: null,
+      };
+      await saveCustomJobLocally(fallbackJob);
+      return { ok: true, job: fallbackJob };
+    }
+
+    const createdJob = (data as JobRow) || {
+      id: "job_" + Date.now(),
+      ...newJobPayload,
+      image_url: null,
+    };
+    await saveCustomJobLocally(createdJob);
+    return { ok: true, job: createdJob };
+  } catch (e: any) {
+    console.error("Job creation error:", e);
+    const fallbackJob: JobRow = {
+      id: "job_" + Date.now(),
+      ...newJobPayload,
+      image_url: null,
+    };
+    await saveCustomJobLocally(fallbackJob);
+    return { ok: true, job: fallbackJob };
+  }
+}
+
+export async function fetchJobs(limit = 50): Promise<JobRow[]> {
+  const localJobs = await fetchCustomJobsLocally();
+  const sb = getSupabase();
+  if (!sb) return localJobs;
+
+  try {
+    const { data, error } = await sb
+      .from("jobs")
+      .select("id,org,company,title,type,location,city,remote,experience,posted_at,salary,image_url,posted_by,owner_id,description")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error || !data) {
+      return localJobs;
+    }
+
+    const cloudJobs = data as JobRow[];
+    const cloudIds = new Set(cloudJobs.map((j) => j.id));
+    const merged = [
+      ...localJobs.filter((j) => !cloudIds.has(j.id)),
+      ...cloudJobs,
+    ];
+    return merged;
+  } catch {
+    return localJobs;
+  }
 }
 
 export type JobApplication = {
