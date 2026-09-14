@@ -4,6 +4,7 @@ import {
   rejectVerification,
   VerificationRequest,
 } from "@/services/admin";
+import { Avatar } from "@/components/ui/Avatar";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import React, { useEffect, useState } from "react";
@@ -146,13 +147,10 @@ export default function AdminVerifications() {
             return (
               <View key={req.id} style={styles.requestCard}>
                 <View style={styles.cardHeader}>
-                  <Image
-                    source={
-                      req.avatar_url
-                        ? { uri: req.avatar_url }
-                        : require("../../assets/images/react-logo.png")
-                    }
-                    style={styles.avatar}
+                  <Avatar
+                    uri={req.avatar_url}
+                    name={req.full_name}
+                    size={50}
                   />
                   <View style={{ flex: 1, gap: 2 }}>
                     <View style={styles.nameRow}>

@@ -1,12 +1,12 @@
 import SafeScreen from "@/components/SafeScreen";
-import { Chip, EmptyState, SearchBar } from "@/components/ui";
+import { Avatar, Chip, EmptyState, SearchBar } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { EventRow, fetchEvents } from "@/services/events";
 import { hasPermission } from "@/services/permissions";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   Pressable,
@@ -29,10 +29,13 @@ const CATEGORIES = [
 
 export default function Events() {
   const router = useRouter();
-  const { profile, hasRole } = useAuth();
-  const avatarSrc = profile?.avatarUrl
-    ? { uri: profile.avatarUrl }
-    : require("../../assets/images/react-logo.png");
+  const { profile, hasRole, refreshProfile } = useAuth();
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshProfile();
+    }, [refreshProfile])
+  );
 
   const [events, setEvents] = useState<EventRow[]>([]);
   const [search, setSearch] = useState("");
@@ -84,15 +87,19 @@ export default function Events() {
       >
         {/* Header */}
         <View style={styles.topRow}>
-          <View style={styles.topLeft}>
-            <View style={styles.topAvatarWrap}>
-              <Image source={avatarSrc} style={styles.topAvatar} contentFit="cover" />
-            </View>
+          <Pressable style={styles.topLeft} onPress={() => router.push("/profile")}>
+            <Avatar
+              uri={profile?.avatarUrl}
+              name={profile?.fullName}
+              size={44}
+              bordered
+              borderColor={colors.accentYellow}
+            />
             <View>
               <Text style={styles.topGreeting}>Good day,</Text>
               <Text style={styles.topName}>{profile?.fullName ?? "Guest"}</Text>
             </View>
-          </View>
+          </Pressable>
           <Pressable style={styles.notifBtn} hitSlop={6} onPress={() => router.push("/notifications")}>
             <MaterialIcons name="notifications" size={20} color={colors.textPrimary} />
           </Pressable>

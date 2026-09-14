@@ -1,4 +1,5 @@
 import SafeScreen from "@/components/SafeScreen";
+import { Avatar } from "@/components/ui/Avatar";
 import { Conversation, fetchConversations } from "@/services/messages";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -90,13 +91,10 @@ export default function MessagesInbox() {
                   onPress={() => router.push(`/messages/${conv.participant_id}` as any)}
                   hitSlop={4}
                 >
-                  <Image
-                    source={
-                      conv.participant_avatar
-                        ? { uri: conv.participant_avatar }
-                        : require("../../assets/images/react-logo.png")
-                    }
-                    style={styles.avatar}
+                  <Avatar
+                    uri={conv.participant_avatar}
+                    name={conv.participant_name}
+                    size={48}
                   />
 
                   <View style={{ flex: 1, gap: 2 }}>

@@ -1,11 +1,12 @@
 import SafeScreen from "@/components/SafeScreen";
+import { Avatar } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { getRoleBadge } from "@/services/permissions";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -30,17 +31,19 @@ type SettingItem = {
 
 export default function Settings() {
     const router = useRouter();
-    const { profile, user, signOut } = useAuth();
+    const { profile, user, signOut, refreshProfile } = useAuth();
     const role = profile?.role ?? "user";
     const badge = getRoleBadge(role);
+
+    useFocusEffect(
+        useCallback(() => {
+            refreshProfile();
+        }, [refreshProfile])
+    );
 
     const [pushNotifs, setPushNotifs] = useState(true);
     const [emailNotifs, setEmailNotifs] = useState(true);
     const [darkMode, setDarkMode] = useState(true);
-
-    const avatarSrc = profile?.avatarUrl
-        ? { uri: profile.avatarUrl }
-        : require("../assets/images/react-logo.png");
 
     const [signingOut, setSigningOut] = useState(false);
 
@@ -241,9 +244,13 @@ export default function Settings() {
 
                 {/* Profile Card */}
                 <View style={styles.profileCard}>
-                    <View style={styles.profileAvatarWrap}>
-                        <Image source={avatarSrc} style={styles.profileAvatar} contentFit="cover" />
-                    </View>
+                    <Avatar
+                        uri={profile?.avatarUrl}
+                        name={profile?.fullName}
+                        size={56}
+                        bordered
+                        borderColor={colors.accentYellow}
+                    />
                     <View style={{ flex: 1, gap: 3 }}>
                         <Text style={styles.profileName}>{profile?.fullName ?? "Guest"}</Text>
                         <Text style={styles.profileEmail}>{user?.email ?? "Not signed in"}</Text>

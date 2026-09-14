@@ -1,5 +1,5 @@
 import SafeScreen from "@/components/SafeScreen";
-import { Button, Input } from "@/components/ui";
+import { Avatar, Button, Input } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { getSupabase, getSupabaseUrl } from "@/lib/supabase";
 import { getRoleBadge } from "@/services/permissions";
@@ -9,7 +9,7 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 export default function ProfileSetup() {
   const router = useRouter();
@@ -28,18 +28,19 @@ export default function ProfileSetup() {
           namePlaceholder: "e.g. Acme Design Studio",
           bioLabel: "Studio Mission & Overview",
           bioPlaceholder: "What kind of work does your company create and what talent are you looking for?",
-          avatarHint: "Tap camera to upload studio logo",
+          avatarHint: "Tap camera to upload company/studio logo",
         };
       case "creative":
         return {
-          headerTitle: "Creative Profile Setup",
-          headerSubtitle: "Showcase your identity to land briefs, join audio rooms, and connect.",
-          nameLabel: "Your Name / Alias *",
-          namePlaceholder: "e.g. Alex Morgan",
-          bioLabel: "Creative Bio & Superpower",
-          bioPlaceholder: "A snapshot of your craft, design philosophy, and what you build…",
-          avatarHint: "Tap camera to upload profile photo",
+          headerTitle: "Creator Profile",
+          headerSubtitle: "Showcase your artistic identity, skills, and portfolio.",
+          nameLabel: "Display / Artist Name *",
+          namePlaceholder: "e.g. Amara Okafor",
+          bioLabel: "Artist Bio & Statement",
+          bioPlaceholder: "Tell clients and collaborators about your craft and vision…",
+          avatarHint: "Tap camera to upload headshot or avatar",
         };
+      case "user":
       default:
         return {
           headerTitle: "Community Profile",
@@ -59,9 +60,6 @@ export default function ProfileSetup() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
-  const [displayAvatarSrc, setDisplayAvatarSrc] = useState<any>(
-    require("../assets/images/react-logo.png")
-  );
   const [existingAvatarUrl, setExistingAvatarUrl] = useState<string | null>(
     null
   );
@@ -78,7 +76,6 @@ export default function ProfileSetup() {
       setBio(profile.bio ?? "");
       if (profile.avatarUrl) {
         setExistingAvatarUrl(profile.avatarUrl);
-        setDisplayAvatarSrc({ uri: profile.avatarUrl });
       }
     }
   }, [user, profile]);
@@ -99,7 +96,6 @@ export default function ProfileSetup() {
     const asset = result.assets?.[0];
     if (asset?.uri) {
       setAvatarUri(asset.uri);
-      setDisplayAvatarSrc({ uri: asset.uri });
     }
   }
 
@@ -118,22 +114,70 @@ export default function ProfileSetup() {
       parts.length > 1
         ? parts[parts.length - 1].toLowerCase().split("?")[0]
         : "jpg";
-    const path = `public/${userId}.${ext}`;
-    const name = `${userId}.${ext}`;
-    const type = `image/${ext}`;
-    const form = new FormData();
-    form.append("file", { uri, name, type } as any);
-    const res = await fetch(`${baseUrl}/storage/v1/object/avatars/${path}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "x-upsert": "true",
-      },
-      body: form,
-    });
-    if (!res.ok) return null;
-    const pub = sb.storage.from("avatars").getPublicUrl(path);
-    return pub.data.publicUrl ?? null;
+    const stamp = Date.now();
+    const path = `public/${userId}/${stamp}.${ext}`;
+    const name = `${stamp}.${ext}`;
+    const type = `image/${ext === "jpg" ? "jpeg" : ext}`;
+
+    // On Web, upload Blob directly using Supabase client to avoid FormData [object Object] serialization issues
+    if (Platform.OS === "web") {
+      try {
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        const { error: uploadError } = await sb.storage
+          .from("avatars")
+          .upload(path, blob, {
+            upsert: true,
+            contentType: blob.type || type,
+          });
+        if (!uploadError) {
+          const pub = sb.storage.from("avatars").getPublicUrl(path);
+          return pub.data.publicUrl ? `${pub.data.publicUrl}?t=${stamp}` : null;
+        }
+        console.error("Supabase web storage upload error:", uploadError);
+      } catch (webErr) {
+        console.warn("Web blob fetch/upload error:", webErr);
+      }
+    }
+
+    try {
+      const form = new FormData();
+      form.append("file", { uri, name, type } as any);
+      const res = await fetch(`${baseUrl}/storage/v1/object/avatars/${path}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "x-upsert": "true",
+        },
+        body: form,
+      });
+      if (res.ok) {
+        const pub = sb.storage.from("avatars").getPublicUrl(path);
+        return pub.data.publicUrl ? `${pub.data.publicUrl}?t=${stamp}` : null;
+      }
+    } catch (formErr) {
+      console.warn("FormData upload failed:", formErr);
+    }
+
+    // Fallback: arrayBuffer upload
+    try {
+      const res = await fetch(uri);
+      const arrayBuffer = await res.arrayBuffer();
+      const { error: abErr } = await sb.storage
+        .from("avatars")
+        .upload(path, arrayBuffer, {
+          upsert: true,
+          contentType: type,
+        });
+      if (!abErr) {
+        const pub = sb.storage.from("avatars").getPublicUrl(path);
+        return pub.data.publicUrl ? `${pub.data.publicUrl}?t=${stamp}` : null;
+      }
+    } catch {
+      // final fallback
+    }
+
+    return null;
   }
 
   async function handleSave() {
@@ -162,9 +206,12 @@ export default function ProfileSetup() {
       let avatarUrl: string | null = existingAvatarUrl;
       if (avatarUri) {
         try {
-          avatarUrl = await uploadAvatarFromUri(user.id, avatarUri);
-        } catch {
-          avatarUrl = null;
+          const uploaded = await uploadAvatarFromUri(user.id, avatarUri);
+          if (uploaded) {
+            avatarUrl = uploaded;
+          }
+        } catch (upErr) {
+          console.warn("Avatar upload error:", upErr);
         }
       }
       await sb.from("profiles").upsert(
@@ -178,9 +225,6 @@ export default function ProfileSetup() {
       );
       setExistingAvatarUrl(avatarUrl);
       setAvatarUri(null);
-      if (avatarUrl) {
-        setDisplayAvatarSrc({ uri: avatarUrl });
-      }
       await refreshProfile();
       router.replace("/(tabs)/home");
     } catch (e: any) {
@@ -222,10 +266,12 @@ export default function ProfileSetup() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.avatarWrap}>
-          <Image
-            source={displayAvatarSrc}
-            style={styles.avatar}
-            contentFit="cover"
+          <Avatar
+            uri={avatarUri || existingAvatarUrl}
+            name={fullName}
+            size={100}
+            bordered
+            borderColor={colors.accentYellow}
           />
           <Pressable
             style={styles.cameraBadge}
@@ -292,32 +338,26 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 24 },
   avatarWrap: {
     alignSelf: "center",
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    borderWidth: 2,
-    borderColor: colors.outline,
+    width: 104,
+    height: 104,
     marginTop: 14,
     marginBottom: 16,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
-    backgroundColor: colors.surface,
-    overflow: "hidden",
   },
-  avatar: { width: 100, height: 100, borderRadius: 50 },
   cameraBadge: {
     position: "absolute",
-    right: 6,
-    bottom: 6,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "#fff",
+    right: 0,
+    bottom: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.accentYellow,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.outline,
+    borderWidth: 2,
+    borderColor: colors.background,
   },
   label: {
     color: colors.textPrimary,

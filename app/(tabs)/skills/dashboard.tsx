@@ -1,4 +1,5 @@
 import SafeScreen from "@/components/SafeScreen";
+import { Avatar } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { Course, fetchCourses, fetchLearningStats } from "@/services/courses";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
@@ -12,11 +13,8 @@ type Stat = { label: string; value: string; suffix?: string };
 
 export default function SkillsDashboard() {
   const router = useRouter();
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const profileName = profile?.fullName ?? "Guest";
-  const avatarSrc = profile?.avatarUrl
-    ? { uri: profile.avatarUrl }
-    : require("../../../assets/images/react-logo.png");
 
   const [stats, setStats] = useState<Stat[]>([
     { label: "Learning Streak", value: "0", suffix: "Days" },
@@ -27,6 +25,8 @@ export default function SkillsDashboard() {
 
   useFocusEffect(
     useCallback(() => {
+      refreshProfile();
+
       fetchCourses().then((data) => {
         setCourses(data);
       });
@@ -38,7 +38,7 @@ export default function SkillsDashboard() {
           { label: "Ai Tools Used This Week", value: String(ls.aiToolsUsedThisWeek) },
         ]);
       });
-    }, [])
+    }, [refreshProfile])
   );
 
   const tools = [
@@ -53,15 +53,19 @@ export default function SkillsDashboard() {
     <SafeScreen>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.topRow}>
-          <View style={styles.topLeft}>
-            <View style={styles.topAvatarWrap}>
-              <Image source={avatarSrc} style={styles.topAvatar} contentFit="cover" />
-            </View>
+          <Pressable style={styles.topLeft} onPress={() => router.push("/profile")}>
+            <Avatar
+              uri={profile?.avatarUrl}
+              name={profile?.fullName}
+              size={44}
+              bordered
+              borderColor={colors.accentYellow}
+            />
             <View>
               <Text style={styles.topGreeting}>Good day,</Text>
               <Text style={styles.topName}>{profileName}</Text>
             </View>
-          </View>
+          </Pressable>
           <View style={styles.topActions}>
             <Pressable style={[styles.topActionBtn, styles.topActionDark]} hitSlop={6}>
               <MaterialIcons name="language" size={18} color="#fff" />

@@ -126,7 +126,7 @@ export default function Login() {
       >
         <View style={styles.avatarWrap}>
           <Image
-            source={require("../assets/images/react-logo.png")}
+            source={require("../assets/images/icon.png")}
             style={styles.avatar}
             contentFit="cover"
           />

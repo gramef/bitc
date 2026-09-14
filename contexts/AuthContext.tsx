@@ -46,6 +46,10 @@ const AuthContext = createContext<AuthState>({
   hasRole: () => false,
 });
 
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const CACHED_PROFILE_KEY = "@bitc_cached_profile";
+
 /* ────────────────────── Provider ────────────────────── */
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -53,6 +57,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+
+  // Pre-load cached profile instantly to eliminate placeholder flash
+  useEffect(() => {
+    AsyncStorage.getItem(CACHED_PROFILE_KEY).then((cached) => {
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed && parsed.id) {
+            setProfile(parsed);
+          }
+        } catch {}
+      }
+    });
+  }, []);
 
   /* ---------- Fetch profile helper ---------- */
   const fetchProfile = useCallback(async (userId: string) => {
@@ -64,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq("id", userId)
       .maybeSingle();
     if (data) {
-      setProfile({
+      const p: Profile = {
         id: data.id,
         fullName: data.full_name ?? "Guest",
         avatarUrl: data.avatar_url ?? null,
@@ -72,7 +90,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: (data.role as UserRole) ?? "user",
         isMentor: data.is_mentor ?? false,
         mentorApproved: data.mentor_approved ?? false,
-      });
+      };
+      setProfile(p);
+      AsyncStorage.setItem(CACHED_PROFILE_KEY, JSON.stringify(p)).catch(() => {});
     }
   }, []);
 
@@ -105,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fetchProfile(s.user.id);
       } else {
         setProfile(null);
+        AsyncStorage.removeItem(CACHED_PROFILE_KEY).catch(() => {});
       }
     });
 
@@ -113,7 +134,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   /* ---------- Actions ---------- */
   const refreshProfile = useCallback(async () => {
-    if (user) await fetchProfile(user.id);
+    const sb = getSupabase();
+    if (!sb) return;
+    const currentId = user?.id || (await sb.auth.getUser()).data.user?.id;
+    if (currentId) await fetchProfile(currentId);
   }, [user, fetchProfile]);
 
   const signOut = useCallback(async () => {
@@ -128,6 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setSession(null);
       setProfile(null);
+      AsyncStorage.removeItem(CACHED_PROFILE_KEY).catch(() => {});
     }
   }, []);
 

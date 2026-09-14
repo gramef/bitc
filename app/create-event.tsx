@@ -97,18 +97,47 @@ export default function CreateEvent() {
         const token = sessionRes?.session?.access_token;
         if (!token) return null;
         const ext = uri.split(".").pop()?.toLowerCase().split("?")[0] ?? "jpg";
-        const fileName = `event_${Date.now()}.${ext}`;
+        const stamp = Date.now();
+        const fileName = `event_${stamp}.${ext}`;
         const path = `events/${fileName}`;
-        const form = new FormData();
-        form.append("file", { uri, name: fileName, type: `image/${ext}` } as any);
-        const res = await fetch(`${baseUrl}/storage/v1/object/avatars/${path}`, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}`, "x-upsert": "true" },
-            body: form,
-        });
-        if (!res.ok) return null;
-        const pub = sb.storage.from("avatars").getPublicUrl(path);
-        return pub.data.publicUrl ?? null;
+        const type = `image/${ext === "jpg" ? "jpeg" : ext}`;
+
+        if (Platform.OS === "web") {
+            try {
+                const response = await fetch(uri);
+                const blob = await response.blob();
+                const { error: uploadError } = await sb.storage
+                    .from("avatars")
+                    .upload(path, blob, {
+                        upsert: true,
+                        contentType: blob.type || type,
+                    });
+                if (!uploadError) {
+                    const pub = sb.storage.from("avatars").getPublicUrl(path);
+                    return pub.data.publicUrl ? `${pub.data.publicUrl}?t=${stamp}` : null;
+                }
+            } catch (webErr) {
+                console.warn("Web blob event image upload failed:", webErr);
+            }
+        }
+
+        try {
+            const form = new FormData();
+            form.append("file", { uri, name: fileName, type } as any);
+            const res = await fetch(`${baseUrl}/storage/v1/object/avatars/${path}`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}`, "x-upsert": "true" },
+                body: form,
+            });
+            if (res.ok) {
+                const pub = sb.storage.from("avatars").getPublicUrl(path);
+                return pub.data.publicUrl ? `${pub.data.publicUrl}?t=${stamp}` : null;
+            }
+        } catch (formErr) {
+            console.warn("FormData upload failed:", formErr);
+        }
+
+        return null;
     }
 
     function formatDate(d: Date) {

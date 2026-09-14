@@ -1,12 +1,13 @@
 import SafeScreen from "@/components/SafeScreen";
+import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { getRoleBadge } from "@/services/permissions";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import { Alert, Modal, Platform, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
 
 
@@ -23,9 +24,32 @@ export default function UserProfile() {
     role === "business" ? "Open Roles" : role === "user" ? "Events" : "Portfolio"
   );
   const [refreshing, setRefreshing] = useState(false);
-  const [fullName, setFullName] = useState("Guest");
-  const [bio, setBio] = useState<string | null>(null);
-  const [avatarSrc, setAvatarSrc] = useState<any>(require("../assets/images/react-logo.png"));
+  const [fullName, setFullName] = useState(authProfile?.fullName ?? "Guest");
+  const [bio, setBio] = useState<string | null>(authProfile?.bio ?? null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(authProfile?.avatarUrl ?? null);
+
+  // Synchronize state immediately when authProfile changes or refreshes
+  useEffect(() => {
+    if (authProfile) {
+      if (authProfile.fullName && authProfile.fullName !== "Guest") {
+        setFullName(authProfile.fullName);
+      }
+      if (authProfile.bio) {
+        setBio(authProfile.bio);
+      }
+      if (authProfile.avatarUrl) {
+        setAvatarUrl(authProfile.avatarUrl);
+      }
+    }
+  }, [authProfile]);
+
+  // Re-sync on screen focus
+  useFocusEffect(
+    useCallback(() => {
+      refreshProfile();
+      loadProfileData();
+    }, [refreshProfile])
+  );
   const [stats, setStats] = useState<{ label: string; value: string; active: boolean }[]>([
     { label: "Projects", value: "0", active: false },
     { label: "Followers", value: "0", active: false },
@@ -55,7 +79,7 @@ export default function UserProfile() {
     const p = await fetchMyProfile();
     setFullName(p.fullName);
     setBio(p.bio);
-    if (p.avatarUrl) setAvatarSrc({ uri: p.avatarUrl });
+    if (p.avatarUrl) setAvatarUrl(p.avatarUrl);
     const currentRole = authProfile?.role ?? "creative";
     if (currentRole === "business") {
       const { fetchJobs } = await import("@/services/jobs");
@@ -217,7 +241,7 @@ export default function UserProfile() {
           />
           <View style={styles.avatarCenter}>
             <View style={styles.avatarWrap}>
-              <Image source={avatarSrc} style={styles.avatar} contentFit="cover" />
+              <Avatar uri={avatarUrl} name={fullName} size={88} bordered />
             </View>
           </View>
           <Pressable style={styles.editBadge} hitSlop={6} onPress={() => router.push("/profile-setup")}>
@@ -751,7 +775,7 @@ export default function UserProfile() {
                 <View key={p.id} style={styles.postCard}>
                   <View style={styles.postHeader}>
                     <View style={styles.postAvatarWrap}>
-                      <Image source={avatarSrc} style={styles.postAvatar} />
+                      <Avatar uri={avatarUrl} name={fullName} size={38} />
                     </View>
                     <View style={{ flex: 1 }}>
                       <View style={styles.nameRowSmall}>

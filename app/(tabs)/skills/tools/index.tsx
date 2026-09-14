@@ -1,9 +1,10 @@
+import { Avatar } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 type ToolBadge = "Popular" | "Trusted by Pros" | "New" | null;
@@ -17,11 +18,14 @@ type Tool = {
 
 export default function SkillsTools() {
   const router = useRouter();
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const profileName = profile?.fullName ?? "Guest";
-  const avatarSrc = profile?.avatarUrl
-    ? { uri: profile.avatarUrl }
-    : require("../../../../assets/images/react-logo.png");
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshProfile();
+    }, [refreshProfile])
+  );
 
   const categories = ["All", "Career", "Design", "Business"] as const;
   const [activeCat, setActiveCat] = useState<typeof categories[number]>("All");
@@ -60,15 +64,19 @@ export default function SkillsTools() {
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.topRow}>
-          <View style={styles.topLeft}>
-            <View style={styles.topAvatarWrap}>
-              <Image source={avatarSrc} style={styles.topAvatar} contentFit="cover" />
-            </View>
+          <Pressable style={styles.topLeft} onPress={() => router.push("/profile")}>
+            <Avatar
+              uri={profile?.avatarUrl}
+              name={profile?.fullName}
+              size={44}
+              bordered
+              borderColor={colors.accentYellow}
+            />
             <View>
               <Text style={styles.topGreeting}>Good day,</Text>
               <Text style={styles.topName}>{profileName}</Text>
             </View>
-          </View>
+          </Pressable>
           <View style={styles.topActions}>
             <Pressable style={[styles.topActionBtn, styles.topActionDark]} hitSlop={6}>
               <MaterialIcons name="language" size={18} color="#fff" />

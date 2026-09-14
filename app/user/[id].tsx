@@ -26,7 +26,7 @@ import {
 
 type Tab = "Posts" | "Portfolio" | "Reviews";
 
-const PLACEHOLDER_AVATAR = require("../../assets/images/react-logo.png");
+import { Avatar } from "@/components/ui/Avatar";
 const COVER_IMAGE = require("../../images/Rectangle 104.png");
 
 export default function PublicUserProfileScreen() {
@@ -116,8 +116,6 @@ export default function PublicUserProfileScreen() {
     );
   }
 
-  const avatarSrc = profile.avatarUrl ? { uri: profile.avatarUrl } : PLACEHOLDER_AVATAR;
-
   return (
     <SafeScreen>
       <ScrollView
@@ -134,9 +132,13 @@ export default function PublicUserProfileScreen() {
           </Pressable>
 
           <View style={styles.avatarCenter}>
-            <View style={styles.avatarWrap}>
-              <Image source={avatarSrc} style={styles.avatar} contentFit="cover" />
-            </View>
+            <Avatar
+              uri={profile.avatarUrl}
+              name={profile.fullName}
+              size={88}
+              bordered
+              borderColor={colors.accentYellow}
+            />
           </View>
         </View>
 
@@ -249,8 +251,12 @@ export default function PublicUserProfileScreen() {
               posts.map((p) => (
                 <View key={p.id} style={styles.postCard}>
                   <View style={styles.postHeader}>
-                    <Image source={avatarSrc} style={styles.postAvatar} />
-                    <View style={{ flex: 1 }}>
+                    <Avatar
+                      uri={profile.avatarUrl}
+                      name={profile.fullName}
+                      size={36}
+                    />
+                    <View style={{ flex: 1, marginLeft: spacing.sm }}>
                       <Text style={styles.postName}>{profile.fullName}</Text>
                       <Text style={styles.postMeta}>{p.time}</Text>
                     </View>

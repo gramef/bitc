@@ -1,4 +1,5 @@
 import SafeScreen from "@/components/SafeScreen";
+import { Avatar } from "@/components/ui/Avatar";
 import { createRoom, fetchSuggestedModerators, type ModeratorUser } from "@/services/rooms";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -433,10 +434,10 @@ export default function CreateRoom() {
                     const isSelected = selectedMods.some((m) => m.id === mod.id);
                     return (
                       <View key={mod.id} style={styles.modRow}>
-                        <Image
-                          source={mod.avatar_url ? { uri: mod.avatar_url } : require("../assets/images/react-logo.png")}
-                          style={styles.modAvatar}
-                          contentFit="cover"
+                        <Avatar
+                          uri={mod.avatar_url}
+                          name={mod.full_name}
+                          size={42}
                         />
                         <View style={{ flex: 1 }}>
                           <Text style={styles.modName}>{mod.full_name}</Text>
@@ -467,10 +468,10 @@ export default function CreateRoom() {
                   <View style={styles.selectedChipsRow}>
                     {selectedMods.map((m) => (
                       <View key={m.id} style={styles.selectedChip}>
-                        <Image
-                          source={m.avatar_url ? { uri: m.avatar_url } : require("../assets/images/react-logo.png")}
-                          style={styles.chipAvatar}
-                          contentFit="cover"
+                        <Avatar
+                          uri={m.avatar_url}
+                          name={m.full_name}
+                          size={24}
                         />
                         <Text style={styles.chipName}>{m.full_name}</Text>
                         <Pressable onPress={() => toggleModerator(m)} hitSlop={6}>

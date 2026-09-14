@@ -16,7 +16,7 @@ import {
   View,
 } from "react-native";
 
-const PLACEHOLDER_AVATAR = require("../assets/images/react-logo.png");
+import { Avatar } from "@/components/ui/Avatar";
 
 const TOPIC_COLORS: Record<string, string> = {
   Music: "#E17055",
@@ -147,10 +147,10 @@ export default function Rooms() {
                 <View style={styles.avatarStack}>
                   {room.speakers.slice(0, 4).map((speaker, i) => (
                     <View key={speaker.id} style={[styles.stackAvatar, { marginLeft: i > 0 ? -10 : 0, zIndex: 10 - i }]}>
-                      <Image
-                        source={speaker.avatar ? { uri: speaker.avatar } : PLACEHOLDER_AVATAR}
-                        style={styles.stackAvatarImg}
-                        contentFit="cover"
+                      <Avatar
+                        uri={speaker.avatar}
+                        name={speaker.name}
+                        size={32}
                       />
                       {speaker.role === "host" && (
                         <View style={styles.hostCrown}>

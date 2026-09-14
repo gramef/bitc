@@ -1,12 +1,12 @@
 import SafeScreen from "@/components/SafeScreen";
-import { EmptyState } from "@/components/ui";
+import { Avatar, EmptyState } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { addComment, createPost, fetchAuthorsByIds, fetchEngagementForPosts, fetchPublicPosts, toggleLike } from "@/services/profile";
 import { fetchLiveRooms } from "@/services/rooms";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   Modal,
@@ -36,10 +36,13 @@ type DisplayPost = {
 
 export default function Community() {
   const router = useRouter();
-  const { profile, user } = useAuth();
-  const avatarSrc = profile?.avatarUrl
-    ? { uri: profile.avatarUrl }
-    : require("../../assets/images/react-logo.png");
+  const { profile, user, refreshProfile } = useAuth();
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshProfile();
+    }, [refreshProfile])
+  );
 
   const [posts, setPosts] = useState<DisplayPost[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -155,15 +158,19 @@ export default function Community() {
       >
         {/* Header */}
         <View style={styles.topRow}>
-          <View style={styles.topLeft}>
-            <View style={styles.topAvatarWrap}>
-              <Image source={avatarSrc} style={styles.topAvatar} contentFit="cover" />
-            </View>
+          <Pressable style={styles.topLeft} onPress={() => router.push("/profile")}>
+            <Avatar
+              uri={profile?.avatarUrl}
+              name={profile?.fullName}
+              size={44}
+              bordered
+              borderColor={colors.accentYellow}
+            />
             <View>
               <Text style={styles.topGreeting}>Good day,</Text>
               <Text style={styles.topName}>{profile?.fullName ?? "Guest"}</Text>
             </View>
-          </View>
+          </Pressable>
           <Pressable style={styles.notifBtn} hitSlop={6} onPress={() => router.push("/notifications")}>
             <MaterialIcons name="notifications" size={20} color={colors.textPrimary} />
           </Pressable>
@@ -194,9 +201,11 @@ export default function Community() {
         {user ? (
           <View style={styles.composeCard}>
             <View style={styles.composeRow}>
-              <View style={styles.composeAvatarWrap}>
-                <Image source={avatarSrc} style={styles.composeAvatar} contentFit="cover" />
-              </View>
+              <Avatar
+                uri={profile?.avatarUrl}
+                name={profile?.fullName}
+                size={36}
+              />
               <TextInput
                 style={styles.composeInput}
                 placeholder="Share something with the community…"
@@ -227,13 +236,11 @@ export default function Community() {
                 onPress={() => router.push(`/user/${post.userId}` as any)}
                 hitSlop={6}
               >
-                <View style={styles.postAvatarWrap}>
-                  <Image
-                    source={post.avatarUrl ? { uri: post.avatarUrl } : require("../../assets/images/react-logo.png")}
-                    style={styles.postAvatar}
-                    contentFit="cover"
-                  />
-                </View>
+                <Avatar
+                  uri={post.avatarUrl}
+                  name={post.name}
+                  size={40}
+                />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.postName}>{post.name}</Text>
                   <Text style={styles.postRole}>{post.role}</Text>

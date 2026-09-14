@@ -1,4 +1,5 @@
 import SafeScreen from "@/components/SafeScreen";
+import { Avatar } from "@/components/ui/Avatar";
 import {
   Conversation,
   DirectMessage,
@@ -110,13 +111,10 @@ export default function ChatThread() {
             <MaterialIcons name="arrow-back" size={20} color={colors.textPrimary} />
           </Pressable>
 
-          <Image
-            source={
-              conversation.participant_avatar
-                ? { uri: conversation.participant_avatar }
-                : require("../../assets/images/react-logo.png")
-            }
-            style={styles.avatar}
+          <Avatar
+            uri={conversation.participant_avatar}
+            name={conversation.participant_name}
+            size={38}
           />
 
           <View style={{ flex: 1 }}>

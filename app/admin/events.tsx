@@ -5,6 +5,7 @@ import {
   fetchEventRoster,
   fetchEvents,
 } from "@/services/events";
+import { Avatar } from "@/components/ui/Avatar";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { CameraView, useCameraPermissions } from "expo-camera";
@@ -278,13 +279,10 @@ export default function AdminEvents() {
             return (
               <View key={item.id} style={styles.attendeeCard}>
                 <View style={styles.attendeeLeft}>
-                  <Image
-                    source={
-                      item.attendee_avatar
-                        ? { uri: item.attendee_avatar }
-                        : require("../../assets/images/react-logo.png")
-                    }
-                    style={styles.avatar}
+                  <Avatar
+                    uri={item.attendee_avatar}
+                    name={item.attendee_name}
+                    size={44}
                   />
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text style={styles.attendeeName}>{item.attendee_name}</Text>

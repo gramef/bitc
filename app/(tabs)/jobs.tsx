@@ -1,12 +1,12 @@
 import SafeScreen from "@/components/SafeScreen";
-import { Chip, EmptyState, SearchBar } from "@/components/ui";
+import { Avatar, Chip, EmptyState, SearchBar } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { fetchJobs, JobRow } from "@/services/jobs";
 import { getRoleBadge } from "@/services/permissions";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   Pressable,
@@ -23,12 +23,15 @@ const TYPES = ["All", "Full-time", "Part-time", "Contract", "Freelance"] as cons
 export default function Jobs() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { profile, hasRole } = useAuth();
+  const { profile, hasRole, refreshProfile } = useAuth();
   const role = profile?.role ?? "creative";
   const badge = getRoleBadge(role);
-  const avatarSrc = profile?.avatarUrl
-    ? { uri: profile.avatarUrl }
-    : require("../../assets/images/react-logo.png");
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshProfile();
+    }, [refreshProfile])
+  );
 
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [search, setSearch] = useState("");
@@ -99,10 +102,14 @@ export default function Jobs() {
       >
         {/* Header */}
         <View style={styles.topRow}>
-          <View style={styles.topLeft}>
-            <View style={styles.topAvatarWrap}>
-              <Image source={avatarSrc} style={styles.topAvatar} contentFit="cover" />
-            </View>
+          <Pressable style={styles.topLeft} onPress={() => router.push("/profile")}>
+            <Avatar
+              uri={profile?.avatarUrl}
+              name={profile?.fullName}
+              size={44}
+              bordered
+              borderColor={colors.accentYellow}
+            />
             <View>
               <Text style={styles.topGreeting}>Good day,</Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 1 }}>
@@ -116,7 +123,7 @@ export default function Jobs() {
                 )}
               </View>
             </View>
-          </View>
+          </Pressable>
           <Pressable style={styles.filterBtn} hitSlop={6} onPress={() => router.push("/filter")}>
             <MaterialIcons name="tune" size={20} color={colors.textPrimary} />
           </Pressable>

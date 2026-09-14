@@ -4,6 +4,7 @@ import ReplyIcon from "@/assets/icons/reply.svg";
 import RepostIcon from "@/assets/icons/repost.svg";
 import ShareIcon from "@/assets/icons/share.svg";
 import SafeScreen from "@/components/SafeScreen";
+import { Avatar } from "@/components/ui/Avatar";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
@@ -92,9 +93,6 @@ export default function PostView() {
     });
   }, [id]);
 
-  const avatarSrc = useMemo(() => {
-    return post?.avatarUrl ? { uri: post.avatarUrl } : require("../../assets/images/react-logo.png");
-  }, [post?.avatarUrl]);
 
   function toggleLike() {
     if (!post) return;
@@ -230,9 +228,11 @@ export default function PostView() {
               onPress={() => router.push(`/user/${post.userId}` as any)}
               hitSlop={6}
             >
-              <View style={styles.postAvatarWrap}>
-                <Image source={avatarSrc} style={styles.postAvatar} contentFit="cover" />
-              </View>
+              <Avatar
+                uri={post.avatarUrl}
+                name={post.name}
+                size={40}
+              />
               <View style={{ flex: 1 }}>
                 <View style={styles.nameRowSmall}>
                   <Text style={styles.postName}>{post.name}</Text>
@@ -277,14 +277,12 @@ export default function PostView() {
           {comments.map((c, idx) => (
             <View key={c.id} style={styles.commentCard}>
               <View style={styles.postHeader}>
-                <View style={styles.postAvatarWrap}>
-                  <Image
-                    source={c.avatarUrl ? { uri: c.avatarUrl } : require("../../assets/images/react-logo.png")}
-                    style={styles.postAvatar}
-                    contentFit="cover"
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
+                <Avatar
+                  uri={c.avatarUrl}
+                  name={c.name}
+                  size={40}
+                />
+                <View style={{ flex: 1, marginLeft: spacing.sm }}>
                   <View style={styles.nameRowSmall}>
                     <Text style={styles.postName}>{c.name}</Text>
                     <MaterialIcons name="verified" size={16} color={colors.accentYellow} />

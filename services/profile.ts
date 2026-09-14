@@ -1,4 +1,5 @@
 import { getSupabase, getSupabaseUrl } from "@/lib/supabase";
+import { Platform } from "react-native";
 
 export type ProfileInfo = {
   fullName: string;
@@ -224,20 +225,49 @@ export async function uploadPortfolioImageFromUri(uri: string): Promise<string |
   const stamp = Date.now();
   const path = `public/${userId}/${stamp}.${ext}`;
   const name = `${stamp}.${ext}`;
-  const type = `image/${ext}`;
-  const form = new FormData();
-  form.append("file", { uri, name, type } as any);
-  const res = await fetch(`${baseUrl}/storage/v1/object/portfolio/${path}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "x-upsert": "true",
-    },
-    body: form,
-  });
-  if (!res.ok) return null;
-  const pub = sb.storage.from("portfolio").getPublicUrl(path);
-  return pub.data.publicUrl ?? null;
+  const type = `image/${ext === "jpg" ? "jpeg" : ext}`;
+
+  // On Web, upload Blob directly using Supabase client to avoid FormData [object Object] serialization issues
+  if (Platform.OS === "web") {
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const { error: uploadError } = await sb.storage
+        .from("portfolio")
+        .upload(path, blob, {
+          upsert: true,
+          contentType: blob.type || type,
+        });
+      if (!uploadError) {
+        const pub = sb.storage.from("portfolio").getPublicUrl(path);
+        return pub.data.publicUrl ? `${pub.data.publicUrl}?t=${stamp}` : null;
+      }
+      console.error("Supabase web storage portfolio upload error:", uploadError);
+    } catch (webErr) {
+      console.warn("Web blob portfolio upload error:", webErr);
+    }
+  }
+
+  try {
+    const form = new FormData();
+    form.append("file", { uri, name, type } as any);
+    const res = await fetch(`${baseUrl}/storage/v1/object/portfolio/${path}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "x-upsert": "true",
+      },
+      body: form,
+    });
+    if (res.ok) {
+      const pub = sb.storage.from("portfolio").getPublicUrl(path);
+      return pub.data.publicUrl ? `${pub.data.publicUrl}?t=${stamp}` : null;
+    }
+  } catch (formErr) {
+    console.warn("Portfolio FormData upload failed:", formErr);
+  }
+
+  return null;
 }
 
 export async function fetchEngagementForPosts(

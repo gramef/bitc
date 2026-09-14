@@ -1,5 +1,5 @@
 import SafeScreen from "@/components/SafeScreen";
-import { EmptyState, SearchBar } from "@/components/ui";
+import { Avatar, EmptyState, SearchBar } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { EventRow, fetchEvents } from "@/services/events";
 import { fetchJobs, JobRow } from "@/services/jobs";
@@ -8,7 +8,7 @@ import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   Dimensions,
@@ -33,14 +33,17 @@ function getGreeting(): string {
 export default function Home() {
   const router = useRouter();
 
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const role = profile?.role ?? "creative";
   const badge = getRoleBadge(role);
   const profileName = profile?.fullName ?? "Guest";
   const firstName = profileName.split(" ")[0];
-  const avatarSrc = profile?.avatarUrl
-    ? { uri: profile.avatarUrl }
-    : require("../assets/images/react-logo.png");
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshProfile();
+    }, [refreshProfile])
+  );
 
   const [events, setEvents] = useState<EventRow[]>([]);
   const [jobs, setJobs] = useState<JobRow[]>([]);
@@ -98,9 +101,13 @@ export default function Home() {
         {/* ── Header ── */}
         <View style={styles.topRow}>
           <Pressable style={styles.topLeft} onPress={() => router.push("/profile")}>
-            <View style={styles.topAvatarRing}>
-              <Image source={avatarSrc} style={styles.topAvatar} contentFit="cover" />
-            </View>
+            <Avatar
+              uri={profile?.avatarUrl}
+              name={profile?.fullName}
+              size={42}
+              bordered
+              borderColor={colors.accentYellow}
+            />
             <View>
               <Text style={styles.topGreeting}>{getGreeting()} 👋</Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 }}>

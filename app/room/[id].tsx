@@ -35,8 +35,7 @@ import {
   Text,
   View,
 } from "react-native";
-
-const PLACEHOLDER_AVATAR = require("../../assets/images/react-logo.png");
+import { Avatar } from "@/components/ui/Avatar";
 
 export default function RoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -317,10 +316,10 @@ export default function RoomScreen() {
                   delayLongPress={300}
                 >
                   <View style={[styles.avatarBorderWrap, isSpeakingNow && styles.activeSpeakerBorder]}>
-                    <Image
-                      source={p.avatar_url ? { uri: p.avatar_url } : PLACEHOLDER_AVATAR}
-                      style={styles.gridAvatar}
-                      contentFit="cover"
+                    <Avatar
+                      uri={p.avatar_url}
+                      name={p.full_name}
+                      size={76}
                     />
                   </View>
                   <Text

@@ -1,4 +1,6 @@
 import SafeScreen from "@/components/SafeScreen";
+import { Avatar } from "@/components/ui";
+import { useAuth } from "@/contexts/AuthContext";
 import { Course, fetchCourses } from "@/services/courses";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -9,42 +11,39 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 export default function SkillsLearn() {
   const router = useRouter();
-  const [profileName, setProfileName] = useState("Guest");
-  const [avatarSrc, setAvatarSrc] = useState<any>(require("../../../assets/images/react-logo.png"));
+  const { profile, refreshProfile } = useAuth();
+  const profileName = profile?.fullName ?? "Guest";
   const [allCourses, setAllCourses] = useState<Course[]>([]);
 
   useFocusEffect(
     useCallback(() => {
-      import("@/services/profile").then(({ fetchMyProfile }) => {
-        fetchMyProfile().then((p) => {
-          setProfileName(p.fullName);
-          if (p.avatarUrl) setAvatarSrc({ uri: p.avatarUrl });
-        });
-      });
-
+      refreshProfile();
       fetchCourses().then((data) => {
         setAllCourses(data);
       });
-    }, [])
+    }, [refreshProfile])
   );
 
   const inProgress = allCourses.filter((c) => c.id === "c1" || c.id === "c2");
   const recommended = allCourses.find((c) => c.id === "r1") || allCourses[0];
 
-
   return (
     <SafeScreen>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.topRow}>
-          <View style={styles.topLeft}>
-            <View style={styles.topAvatarWrap}>
-              <Image source={avatarSrc} style={styles.topAvatar} contentFit="cover" />
-            </View>
+          <Pressable style={styles.topLeft} onPress={() => router.push("/profile")}>
+            <Avatar
+              uri={profile?.avatarUrl}
+              name={profile?.fullName}
+              size={44}
+              bordered
+              borderColor={colors.accentYellow}
+            />
             <View>
               <Text style={styles.topGreeting}>Good day,</Text>
               <Text style={styles.topName}>{profileName}</Text>
             </View>
-          </View>
+          </Pressable>
           <View style={styles.topActions}>
             <Pressable style={[styles.topActionBtn, styles.topActionDark]} hitSlop={6}>
               <MaterialIcons name="language" size={18} color="#fff" />
