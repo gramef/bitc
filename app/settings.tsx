@@ -23,6 +23,7 @@ type SettingItem = {
     icon: keyof typeof MaterialIcons.glyphMap;
     label: string;
     subtitle?: string;
+    badgeText?: string;
     color?: string;
     isSwitch?: boolean;
     isDestructive?: boolean;
@@ -43,7 +44,6 @@ export default function Settings() {
 
     const [pushNotifs, setPushNotifs] = useState(true);
     const [emailNotifs, setEmailNotifs] = useState(true);
-    const [darkMode, setDarkMode] = useState(true);
 
     const [signingOut, setSigningOut] = useState(false);
 
@@ -166,15 +166,37 @@ export default function Settings() {
     const appSettings: SettingItem[] = [
         {
             icon: "dark-mode",
-            label: "Dark Mode",
-            subtitle: "Always on",
-            isSwitch: true,
+            label: "Appearance",
+            subtitle: "Signature Dark · Luxury creative palette",
+            badgeText: "DEFAULT",
+            color: colors.accentYellow,
+            onPress: () => {
+                const title = "Signature Dark Theme";
+                const message =
+                    "BITC is crafted in our signature dark luxury palette, optimized for creative showcases, audio rooms, and OLED displays.\n\nFull dual-theme support (Light Mode) is scheduled for version 1.1.";
+                if (Platform.OS === "web") {
+                    if (typeof window !== "undefined") {
+                        window.alert(`${title}\n\n${message}`);
+                    }
+                } else {
+                    Alert.alert(title, message);
+                }
+            },
         },
         {
             icon: "language",
             label: "Language",
-            subtitle: "English",
-            onPress: () => Alert.alert("Language", "English is currently the only supported language."),
+            subtitle: "English (US)",
+            badgeText: "ACTIVE",
+            onPress: () => {
+                const title = "Language";
+                const msg = "English (US) is currently active. Additional languages will be available in future updates.";
+                if (Platform.OS === "web") {
+                    if (typeof window !== "undefined") window.alert(`${title}\n\n${msg}`);
+                } else {
+                    Alert.alert(title, msg);
+                }
+            },
         },
     ];
 
@@ -216,6 +238,11 @@ export default function Settings() {
                     <Text style={[styles.settingLabel, item.isDestructive && { color: "#ff4444" }]}>{item.label}</Text>
                     {item.subtitle && <Text style={styles.settingSub}>{item.subtitle}</Text>}
                 </View>
+                {item.badgeText ? (
+                    <View style={styles.settingPillBadge}>
+                        <Text style={styles.settingPillText}>{item.badgeText}</Text>
+                    </View>
+                ) : null}
                 {item.isSwitch ? (
                     <Switch
                         value={switchState}
@@ -303,8 +330,7 @@ export default function Settings() {
                 {/* Appearance */}
                 <Text style={styles.sectionTitle}>Appearance</Text>
                 <View style={styles.sectionCard}>
-                    {renderSettingRow(appSettings[0], 0, darkMode, setDarkMode)}
-                    {renderSettingRow(appSettings[1], 1)}
+                    {appSettings.map((s, i) => renderSettingRow(s, i))}
                 </View>
 
                 {/* Support */}
@@ -515,6 +541,21 @@ const styles = StyleSheet.create({
         fontFamily: fonts.regular,
         fontSize: fonts.size.xs,
         marginTop: 2,
+    },
+    settingPillBadge: {
+        backgroundColor: colors.accentYellow + "18",
+        borderWidth: 1,
+        borderColor: colors.accentYellow + "35",
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: radii.pill,
+        marginRight: 4,
+    },
+    settingPillText: {
+        color: colors.accentYellow,
+        fontFamily: fonts.bold,
+        fontSize: 10,
+        letterSpacing: 0.6,
     },
     dangerSection: {
         marginHorizontal: spacing.lg,
