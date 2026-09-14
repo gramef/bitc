@@ -27,7 +27,7 @@ import {
 type Tab = "Posts" | "Portfolio" | "Reviews";
 
 import { Avatar } from "@/components/ui/Avatar";
-const COVER_IMAGE = require("../../images/Rectangle 104.png");
+import { ProfileCover } from "@/components/ui/ProfileCover";
 
 export default function PublicUserProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -126,7 +126,14 @@ export default function PublicUserProfileScreen() {
       >
         {/* Cover & Avatar */}
         <View style={styles.coverWrap}>
-          <Image source={COVER_IMAGE} style={styles.cover} contentFit="cover" />
+          <ProfileCover
+            uri={profile.coverUrl}
+            role={profile.role}
+            height={160}
+            borderRadius={0}
+            editable={isMe}
+            onPressEdit={() => router.push("/profile-setup")}
+          />
           <Pressable style={styles.headerBackBtn} hitSlop={8} onPress={() => router.back()}>
             <MaterialIcons name="arrow-back" size={20} color="#fff" />
           </Pressable>

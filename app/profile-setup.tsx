@@ -1,5 +1,5 @@
 import SafeScreen from "@/components/SafeScreen";
-import { Avatar, Button, Input } from "@/components/ui";
+import { Avatar, Button, Input, ProfileCover } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { getSupabase, getSupabaseUrl } from "@/lib/supabase";
 import { getRoleBadge } from "@/services/permissions";
@@ -64,6 +64,9 @@ export default function ProfileSetup() {
   const [existingAvatarUrl, setExistingAvatarUrl] = useState<string | null>(
     null
   );
+  const [coverUri, setCoverUri] = useState<string | null>(null);
+  const [coverBase64, setCoverBase64] = useState<string | null>(null);
+  const [existingCoverUrl, setExistingCoverUrl] = useState<string | null>(null);
 
   // Pre-fill from AuthContext profile
   useEffect(() => {
@@ -77,6 +80,9 @@ export default function ProfileSetup() {
       setBio(profile.bio ?? "");
       if (profile.avatarUrl) {
         setExistingAvatarUrl(profile.avatarUrl);
+      }
+      if (profile.coverUrl) {
+        setExistingCoverUrl(profile.coverUrl);
       }
     }
   }, [user, profile]);
@@ -101,6 +107,30 @@ export default function ProfileSetup() {
       setAvatarUri(asset.uri);
       if (asset.base64) {
         setAvatarBase64(`data:image/jpeg;base64,${asset.base64}`);
+      }
+    }
+  }
+
+  async function pickCover() {
+    setError(null);
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      setError("Permission required to select cover image");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      quality: 0.75,
+      allowsEditing: true,
+      aspect: [16, 7],
+      base64: true,
+      mediaTypes: ["images"] as any,
+    });
+    if (result.canceled) return;
+    const asset = result.assets?.[0];
+    if (asset?.uri) {
+      setCoverUri(asset.uri);
+      if (asset.base64) {
+        setCoverBase64(`data:image/jpeg;base64,${asset.base64}`);
       }
     }
   }
@@ -199,18 +229,42 @@ export default function ProfileSetup() {
       if (avatarUri) {
         avatarUrl = await uploadAvatarFromUri(user.id, avatarUri, avatarBase64);
       }
-      await sb.from("profiles").upsert(
-        {
-          id: user.id,
-          full_name: fullName.trim(),
-          bio: bio.trim(),
-          avatar_url: avatarUrl,
-        },
-        { onConflict: "id" }
-      );
+      let coverUrl: string | null = existingCoverUrl;
+      if (coverUri) {
+        coverUrl = await uploadAvatarFromUri(user.id, coverUri, coverBase64);
+        await sb.auth.updateUser({ data: { cover_url: coverUrl } }).catch(() => {});
+        import("@react-native-async-storage/async-storage").then(({ default: AsyncStorage }) => {
+          AsyncStorage.setItem(`@bitc_cover_${user.id}`, coverUrl!).catch(() => {});
+        });
+      }
+      try {
+        await sb.from("profiles").upsert(
+          {
+            id: user.id,
+            full_name: fullName.trim(),
+            bio: bio.trim(),
+            avatar_url: avatarUrl,
+            cover_url: coverUrl,
+          },
+          { onConflict: "id" }
+        );
+      } catch {
+        await sb.from("profiles").upsert(
+          {
+            id: user.id,
+            full_name: fullName.trim(),
+            bio: bio.trim(),
+            avatar_url: avatarUrl,
+          },
+          { onConflict: "id" }
+        );
+      }
       setExistingAvatarUrl(avatarUrl);
       setAvatarUri(null);
       setAvatarBase64(null);
+      setExistingCoverUrl(coverUrl);
+      setCoverUri(null);
+      setCoverBase64(null);
       await refreshProfile();
       if (profile?.fullName && profile.fullName !== "Guest") {
         if (router.canGoBack()) {
@@ -259,6 +313,18 @@ export default function ProfileSetup() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Cover Banner Preview & Picker */}
+        <View style={styles.setupCoverContainer}>
+          <ProfileCover
+            uri={coverBase64 || coverUri || existingCoverUrl}
+            role={role}
+            height={110}
+            borderRadius={radii.card}
+            editable
+            onPressEdit={pickCover}
+          />
+        </View>
+
         <View style={styles.avatarWrap}>
           <Pressable onPress={pickAvatar} hitSlop={6} accessibilityRole="button" accessibilityLabel="Select profile picture">
             <Avatar
@@ -332,6 +398,11 @@ const styles = StyleSheet.create({
   },
   progressFill: { height: "100%", backgroundColor: colors.accentGreen },
   content: { paddingHorizontal: 16, paddingBottom: 24 },
+  setupCoverContainer: {
+    width: "100%",
+    marginTop: 8,
+    marginBottom: 4,
+  },
   avatarWrap: {
     alignSelf: "center",
     width: 104,

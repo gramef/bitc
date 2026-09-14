@@ -1,5 +1,6 @@
 import SafeScreen from "@/components/SafeScreen";
 import { Avatar } from "@/components/ui/Avatar";
+import { ProfileCover } from "@/components/ui/ProfileCover";
 import { useAuth } from "@/contexts/AuthContext";
 import { getRoleBadge } from "@/services/permissions";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
@@ -27,6 +28,7 @@ export default function UserProfile() {
   const [fullName, setFullName] = useState(authProfile?.fullName ?? "Guest");
   const [bio, setBio] = useState<string | null>(authProfile?.bio ?? null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(authProfile?.avatarUrl ?? null);
+  const [coverUrl, setCoverUrl] = useState<string | null>(authProfile?.coverUrl ?? null);
 
   // Synchronize state immediately when authProfile changes or refreshes
   useEffect(() => {
@@ -39,6 +41,9 @@ export default function UserProfile() {
       }
       if (authProfile.avatarUrl) {
         setAvatarUrl(authProfile.avatarUrl);
+      }
+      if (authProfile.coverUrl) {
+        setCoverUrl(authProfile.coverUrl);
       }
     }
   }, [authProfile]);
@@ -133,12 +138,81 @@ export default function UserProfile() {
     }
   }
 
+  async function handleUpdateCover() {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Permission Required", "Please allow photo library access to change your cover banner.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        quality: 0.75,
+        allowsEditing: true,
+        aspect: [16, 7],
+        base64: true,
+        mediaTypes: ["images"] as any,
+      });
+      if (result.canceled) return;
+      const asset = result.assets?.[0];
+      if (!asset?.uri) return;
+
+      const previewUri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      setCoverUrl(previewUri);
+      if (authProfile?.id) {
+        import("@react-native-async-storage/async-storage").then(({ default: AsyncStorage }) => {
+          AsyncStorage.setItem(`@bitc_cover_${authProfile.id}`, previewUri).catch(() => {});
+        });
+      }
+
+      const { getSupabase } = await import("@/lib/supabase");
+      const sb = getSupabase();
+      if (!sb || !authProfile?.id) return;
+
+      let savedUrl = previewUri;
+      // Fast attempt with Supabase Storage (max 2.5s)
+      try {
+        const stamp = Date.now();
+        const path = `public/${authProfile.id}/cover_${stamp}.jpg`;
+        const uploadTask = (async () => {
+          const fetchRes = await fetch(previewUri);
+          const body = await fetchRes.blob();
+          const { error: upErr } = await sb.storage.from("avatars").upload(path, body, {
+            upsert: true,
+            contentType: "image/jpeg",
+          });
+          if (!upErr) {
+            const pub = sb.storage.from("avatars").getPublicUrl(path);
+            if (pub?.data?.publicUrl) return `${pub.data.publicUrl}?t=${stamp}`;
+          }
+          return null;
+        })();
+        const timeoutTask = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
+        const resUrl = await Promise.race([uploadTask, timeoutTask]);
+        if (resUrl) savedUrl = resUrl;
+      } catch {}
+
+      // 1. Persist to Auth metadata (synced to cloud across devices)
+      await sb.auth.updateUser({ data: { cover_url: savedUrl } }).catch(() => {});
+
+      // 2. Try updating profiles table
+      try {
+        await sb.from("profiles").update({ cover_url: savedUrl } as any).eq("id", authProfile.id);
+      } catch {}
+
+      setCoverUrl(savedUrl);
+      await refreshProfile();
+    } catch (err: any) {
+      console.warn("Direct cover update error:", err);
+    }
+  }
+
   async function loadProfileData() {
     const { fetchMyProfile, fetchMyPosts, fetchMyPortfolio, fetchMyReviews, fetchEngagementForPosts } = await import("@/services/profile");
     const p = await fetchMyProfile();
     setFullName(p.fullName);
     setBio(p.bio);
     if (p.avatarUrl) setAvatarUrl(p.avatarUrl);
+    if (p.coverUrl) setCoverUrl(p.coverUrl);
     const currentRole = authProfile?.role ?? "creative";
     if (currentRole === "business") {
       const { fetchJobs } = await import("@/services/jobs");
@@ -293,10 +367,13 @@ export default function UserProfile() {
     <SafeScreen>
       <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accentYellow} />}>
         <View style={styles.coverWrap}>
-          <Image
-            source={require("../images/Rectangle 104.png")}
-            style={styles.cover}
-            contentFit="cover"
+          <ProfileCover
+            uri={coverUrl}
+            role={role}
+            height={160}
+            borderRadius={radii.card}
+            editable
+            onPressEdit={handleUpdateCover}
           />
           <View style={styles.avatarCenter}>
             <Pressable

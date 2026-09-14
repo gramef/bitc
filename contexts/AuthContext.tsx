@@ -18,6 +18,7 @@ export type Profile = {
   id: string;
   fullName: string;
   avatarUrl: string | null;
+  coverUrl: string | null;
   bio: string | null;
   role: UserRole;
   isMentor: boolean;
@@ -81,11 +82,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .select("id, full_name, avatar_url, bio, role, is_mentor, mentor_approved")
       .eq("id", userId)
       .maybeSingle();
+    // Check user_metadata and AsyncStorage cache for cover_url
+    let coverUrl: string | null = (data as any)?.cover_url ?? null;
+    if (!coverUrl) {
+      const userRes = await sb.auth.getUser().catch(() => null);
+      coverUrl = userRes?.data?.user?.user_metadata?.cover_url ?? null;
+    }
+    if (!coverUrl) {
+      const cached = await AsyncStorage.getItem(`@bitc_cover_${userId}`).catch(() => null);
+      if (cached) coverUrl = cached;
+    }
+
     if (data) {
       const p: Profile = {
         id: data.id,
         fullName: data.full_name ?? "Guest",
         avatarUrl: data.avatar_url ?? null,
+        coverUrl: coverUrl ?? null,
         bio: data.bio ?? null,
         role: (data.role as UserRole) ?? "user",
         isMentor: data.is_mentor ?? false,

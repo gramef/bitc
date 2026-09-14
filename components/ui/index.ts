@@ -7,4 +7,4 @@ export { default as Input } from "./Input";
 export { default as LoadingSkeleton } from "./LoadingSkeleton";
 export { default as SearchBar } from "./SearchBar";
 export { Avatar } from "./Avatar";
-
+export { ProfileCover } from "./ProfileCover";

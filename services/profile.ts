@@ -1,9 +1,11 @@
 import { getSupabase, getSupabaseUrl } from "@/lib/supabase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
 export type ProfileInfo = {
   fullName: string;
   avatarUrl: string | null;
+  coverUrl?: string | null;
   bio: string | null;
   projectsCount: number;
   followersCount: number;
@@ -55,9 +57,19 @@ export async function fetchMyProfile(): Promise<ProfileInfo> {
     .eq("id", userId)
     .single();
   if (error || !data) return fallback;
+  let coverUrl: string | null = (data as any)?.cover_url ?? null;
+  if (!coverUrl && userRes.user.user_metadata?.cover_url) {
+    coverUrl = userRes.user.user_metadata.cover_url;
+  }
+  if (!coverUrl) {
+    const cached = await AsyncStorage.getItem(`@bitc_cover_${userId}`).catch(() => null);
+    if (cached) coverUrl = cached;
+  }
+
   return {
     fullName: data.full_name ?? "Guest",
     avatarUrl: data.avatar_url ?? null,
+    coverUrl: coverUrl ?? null,
     bio: data.bio ?? null,
     projectsCount: Number(data.projects_count ?? 0),
     followersCount: Number(data.followers_count ?? 0),
@@ -476,6 +488,7 @@ export type PublicProfile = {
   id: string;
   fullName: string;
   avatarUrl: string | null;
+  coverUrl?: string | null;
   bio: string | null;
   role?: string;
   projectsCount: number;
@@ -483,8 +496,6 @@ export type PublicProfile = {
   rating: number;
   isFollowing: boolean;
 };
-
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export async function checkIsFollowing(targetUserId: string): Promise<boolean> {
   const sb = getSupabase();
@@ -574,10 +585,17 @@ export async function fetchUserProfile(targetUserId: string): Promise<PublicProf
   const baseCount = Number(profileData?.followers_count ?? 0);
   const displayCount = followState ? Math.max(1, baseCount) : baseCount;
 
+  let coverUrl: string | null = (profileData as any)?.cover_url ?? null;
+  if (!coverUrl) {
+    const cached = await AsyncStorage.getItem(`@bitc_cover_${targetUserId}`).catch(() => null);
+    if (cached) coverUrl = cached;
+  }
+
   return {
     id: targetUserId,
     fullName: String(profileData?.full_name ?? "Creative Member"),
     avatarUrl: profileData?.avatar_url ? String(profileData.avatar_url) : null,
+    coverUrl: coverUrl ?? null,
     bio: profileData?.bio ? String(profileData.bio) : null,
     role: profileData?.role ? String(profileData.role) : "creative",
     projectsCount: Number(profileData?.projects_count ?? 0),
