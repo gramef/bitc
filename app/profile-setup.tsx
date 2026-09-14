@@ -60,6 +60,7 @@ export default function ProfileSetup() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [avatarBase64, setAvatarBase64] = useState<string | null>(null);
   const [existingAvatarUrl, setExistingAvatarUrl] = useState<string | null>(
     null
   );
@@ -88,96 +89,87 @@ export default function ProfileSetup() {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      quality: 0.8,
+      quality: 0.7,
       allowsEditing: true,
+      aspect: [1, 1],
+      base64: true,
       mediaTypes: ["images"] as any,
     });
     if (result.canceled) return;
     const asset = result.assets?.[0];
     if (asset?.uri) {
       setAvatarUri(asset.uri);
+      if (asset.base64) {
+        setAvatarBase64(`data:image/jpeg;base64,${asset.base64}`);
+      }
     }
   }
 
   async function uploadAvatarFromUri(
     userId: string,
-    uri: string
-  ): Promise<string | null> {
+    uri: string,
+    inlineBase64?: string | null
+  ): Promise<string> {
     const sb = getSupabase();
-    const baseUrl = getSupabaseUrl();
-    if (!sb || !baseUrl) return null;
-    const { data: sessionRes } = await sb.auth.getSession();
-    const token = sessionRes?.session?.access_token;
-    if (!token) return null;
-    const parts = uri.split(".");
-    const ext =
-      parts.length > 1
-        ? parts[parts.length - 1].toLowerCase().split("?")[0]
-        : "jpg";
     const stamp = Date.now();
-    const path = `public/${userId}/${stamp}.${ext}`;
-    const name = `${stamp}.${ext}`;
-    const type = `image/${ext === "jpg" ? "jpeg" : ext}`;
+    const path = `public/${userId}/${stamp}.jpg`;
 
-    // On Web, upload Blob directly using Supabase client to avoid FormData [object Object] serialization issues
-    if (Platform.OS === "web") {
+    // 1. Fast attempt with Supabase Storage (max 2.5 seconds timeout)
+    if (sb) {
       try {
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        const { error: uploadError } = await sb.storage
-          .from("avatars")
-          .upload(path, blob, {
-            upsert: true,
-            contentType: blob.type || type,
-          });
-        if (!uploadError) {
-          const pub = sb.storage.from("avatars").getPublicUrl(path);
-          return pub.data.publicUrl ? `${pub.data.publicUrl}?t=${stamp}` : null;
+        const uploadAction = (async () => {
+          let body: any;
+          const fetchRes = await fetch(inlineBase64 || uri);
+          body = await fetchRes.blob();
+          const { error: upError } = await sb.storage
+            .from("avatars")
+            .upload(path, body, {
+              upsert: true,
+              contentType: "image/jpeg",
+            });
+          if (!upError) {
+            const pub = sb.storage.from("avatars").getPublicUrl(path);
+            if (pub?.data?.publicUrl) {
+              return `${pub.data.publicUrl}?t=${stamp}`;
+            }
+          }
+          return null;
+        })();
+
+        const timeoutAction = new Promise<null>((resolve) =>
+          setTimeout(() => resolve(null), 2500)
+        );
+
+        const storageUrl = await Promise.race([uploadAction, timeoutAction]);
+        if (storageUrl) {
+          return storageUrl;
         }
-        console.error("Supabase web storage upload error:", uploadError);
-      } catch (webErr) {
-        console.warn("Web blob fetch/upload error:", webErr);
+      } catch (storageErr) {
+        console.warn("Storage upload failed:", storageErr);
       }
     }
 
-    try {
-      const form = new FormData();
-      form.append("file", { uri, name, type } as any);
-      const res = await fetch(`${baseUrl}/storage/v1/object/avatars/${path}`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "x-upsert": "true",
-        },
-        body: form,
-      });
-      if (res.ok) {
-        const pub = sb.storage.from("avatars").getPublicUrl(path);
-        return pub.data.publicUrl ? `${pub.data.publicUrl}?t=${stamp}` : null;
-      }
-    } catch (formErr) {
-      console.warn("FormData upload failed:", formErr);
+    // 2. High-speed, guaranteed reliable fallback: Base64 data URI
+    if (inlineBase64 && inlineBase64.startsWith("data:image")) {
+      return inlineBase64;
     }
 
-    // Fallback: arrayBuffer upload
+    // 3. Convert uri to Data URI if base64 was missing
     try {
       const res = await fetch(uri);
-      const arrayBuffer = await res.arrayBuffer();
-      const { error: abErr } = await sb.storage
-        .from("avatars")
-        .upload(path, arrayBuffer, {
-          upsert: true,
-          contentType: type,
-        });
-      if (!abErr) {
-        const pub = sb.storage.from("avatars").getPublicUrl(path);
-        return pub.data.publicUrl ? `${pub.data.publicUrl}?t=${stamp}` : null;
-      }
-    } catch {
-      // final fallback
+      const blob = await res.blob();
+      const dataUri = await new Promise<string | null>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+      if (dataUri) return dataUri;
+    } catch (dataUriErr) {
+      console.warn("Data URI conversion failed:", dataUriErr);
     }
 
-    return null;
+    return uri;
   }
 
   async function handleSave() {
@@ -205,14 +197,7 @@ export default function ProfileSetup() {
     try {
       let avatarUrl: string | null = existingAvatarUrl;
       if (avatarUri) {
-        try {
-          const uploaded = await uploadAvatarFromUri(user.id, avatarUri);
-          if (uploaded) {
-            avatarUrl = uploaded;
-          }
-        } catch (upErr) {
-          console.warn("Avatar upload error:", upErr);
-        }
+        avatarUrl = await uploadAvatarFromUri(user.id, avatarUri, avatarBase64);
       }
       await sb.from("profiles").upsert(
         {
@@ -225,8 +210,17 @@ export default function ProfileSetup() {
       );
       setExistingAvatarUrl(avatarUrl);
       setAvatarUri(null);
+      setAvatarBase64(null);
       await refreshProfile();
-      router.replace("/(tabs)/home");
+      if (profile?.fullName && profile.fullName !== "Guest") {
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace("/(tabs)/profile");
+        }
+      } else {
+        router.replace("/(tabs)/home");
+      }
     } catch (e: any) {
       setError(e?.message || "Network request failed");
     } finally {
@@ -266,13 +260,15 @@ export default function ProfileSetup() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.avatarWrap}>
-          <Avatar
-            uri={avatarUri || existingAvatarUrl}
-            name={fullName}
-            size={100}
-            bordered
-            borderColor={colors.accentYellow}
-          />
+          <Pressable onPress={pickAvatar} hitSlop={6} accessibilityRole="button" accessibilityLabel="Select profile picture">
+            <Avatar
+              uri={avatarBase64 || avatarUri || existingAvatarUrl}
+              name={fullName}
+              size={100}
+              bordered
+              borderColor={colors.accentYellow}
+            />
+          </Pressable>
           <Pressable
             style={styles.cameraBadge}
             onPress={pickAvatar}

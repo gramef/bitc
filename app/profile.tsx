@@ -74,6 +74,65 @@ export default function UserProfile() {
   const [portfolioLocalUri, setPortfolioLocalUri] = useState<string | null>(null);
   const [deleteMenuOpen, setDeleteMenuOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+
+  async function handleUpdateAvatar() {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Permission Required", "Please allow photo library access to change your picture.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        quality: 0.7,
+        allowsEditing: true,
+        aspect: [1, 1],
+        base64: true,
+        mediaTypes: ["images"] as any,
+      });
+      if (result.canceled) return;
+      const asset = result.assets?.[0];
+      if (!asset?.uri) return;
+
+      const previewUri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      setAvatarUrl(previewUri);
+
+      const { getSupabase } = await import("@/lib/supabase");
+      const sb = getSupabase();
+      if (!sb || !authProfile?.id) return;
+
+      let savedUrl = previewUri;
+      // Fast attempt with Supabase Storage (max 2.5s)
+      try {
+        const stamp = Date.now();
+        const path = `public/${authProfile.id}/${stamp}.jpg`;
+        const uploadTask = (async () => {
+          const fetchRes = await fetch(previewUri);
+          const body = await fetchRes.blob();
+          const { error: upErr } = await sb.storage.from("avatars").upload(path, body, {
+            upsert: true,
+            contentType: "image/jpeg",
+          });
+          if (!upErr) {
+            const pub = sb.storage.from("avatars").getPublicUrl(path);
+            if (pub?.data?.publicUrl) return `${pub.data.publicUrl}?t=${stamp}`;
+          }
+          return null;
+        })();
+        const timeoutTask = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
+        const resUrl = await Promise.race([uploadTask, timeoutTask]);
+        if (resUrl) savedUrl = resUrl;
+      } catch {
+        // use previewUri fallback
+      }
+
+      await sb.from("profiles").update({ avatar_url: savedUrl }).eq("id", authProfile.id);
+      setAvatarUrl(savedUrl);
+      await refreshProfile();
+    } catch (err: any) {
+      console.warn("Direct avatar update error:", err);
+    }
+  }
+
   async function loadProfileData() {
     const { fetchMyProfile, fetchMyPosts, fetchMyPortfolio, fetchMyReviews, fetchEngagementForPosts } = await import("@/services/profile");
     const p = await fetchMyProfile();
@@ -240,9 +299,18 @@ export default function UserProfile() {
             contentFit="cover"
           />
           <View style={styles.avatarCenter}>
-            <View style={styles.avatarWrap}>
+            <Pressable
+              style={styles.avatarWrap}
+              onPress={handleUpdateAvatar}
+              accessibilityRole="button"
+              accessibilityLabel="Change profile picture"
+              hitSlop={8}
+            >
               <Avatar uri={avatarUrl} name={fullName} size={88} bordered />
-            </View>
+              <View style={styles.avatarCameraBadge}>
+                <MaterialIcons name="photo-camera" size={14} color="#121212" />
+              </View>
+            </Pressable>
           </View>
           <Pressable style={styles.editBadge} hitSlop={6} onPress={() => router.push("/profile-setup")}>
             <MaterialIcons name="edit" size={18} color={colors.textDark} />
@@ -1120,15 +1188,34 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   avatarWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 92,
+    height: 92,
+    borderRadius: 46,
     borderWidth: 2,
     borderColor: colors.outline,
     backgroundColor: colors.surface,
     alignItems: "center",
     justifyContent: "center",
-    overflow: "hidden",
+    position: "relative",
+  },
+  avatarCameraBadge: {
+    position: "absolute",
+    right: 0,
+    bottom: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.accentYellow,
+    borderWidth: 2,
+    borderColor: colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 4,
   },
   avatar: {
     width: 64,
