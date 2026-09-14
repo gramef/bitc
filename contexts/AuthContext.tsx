@@ -23,6 +23,8 @@ export type Profile = {
   role: UserRole;
   isMentor: boolean;
   mentorApproved: boolean;
+  isVerified: boolean;
+  portfolioUrl: string | null;
 };
 
 type AuthState = {
@@ -79,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!sb) return;
     const { data } = await sb
       .from("profiles")
-      .select("id, full_name, avatar_url, bio, role, is_mentor, mentor_approved")
+      .select("id, full_name, avatar_url, bio, role, is_mentor, mentor_approved, is_verified, portfolio_url")
       .eq("id", userId)
       .maybeSingle();
     // Check user_metadata and AsyncStorage cache for cover_url
@@ -103,6 +105,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: (data.role as UserRole) ?? "user",
         isMentor: data.is_mentor ?? false,
         mentorApproved: data.mentor_approved ?? false,
+        isVerified: (data as any).is_verified ?? false,
+        portfolioUrl: (data as any).portfolio_url ?? null,
       };
       setProfile(p);
       AsyncStorage.setItem(CACHED_PROFILE_KEY, JSON.stringify(p)).catch(() => {});

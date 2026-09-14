@@ -61,59 +61,6 @@ export function parsePriceToCents(priceStr: string): number {
   return isNaN(val) ? 0 : Math.round(val * 100);
 }
 
-/**
- * Seeds initial demo transaction history for testing and admin telemetry.
- */
-const SEED_TRANSACTIONS: PaymentTransaction[] = [
-  {
-    id: "tx_1",
-    title: "Design System Figma UI Kit Pro",
-    amountCents: 4900,
-    currency: "usd",
-    type: "marketplace_purchase",
-    status: "succeeded",
-    creatorId: "user_aisha",
-    payerEmail: "alex@creator.dev",
-    feeSplit: calculateFeeSplit(4900, 10),
-    createdAt: new Date(Date.now() - 3600 * 1000 * 4).toISOString(),
-  },
-  {
-    id: "tx_2",
-    title: "BITC Global Tech Summit 2026 - VIP Pass",
-    amountCents: 15000,
-    currency: "usd",
-    type: "event_ticket",
-    status: "succeeded",
-    creatorId: "bitc_foundation",
-    payerEmail: "sarah.j@acme.org",
-    feeSplit: calculateFeeSplit(15000, 10),
-    createdAt: new Date(Date.now() - 3600 * 1000 * 12).toISOString(),
-  },
-  {
-    id: "tx_3",
-    title: "1:1 Staff Frontend Architecture Mentorship",
-    amountCents: 8500,
-    currency: "usd",
-    type: "mentorship_fee",
-    status: "succeeded",
-    creatorId: "user_marcus",
-    payerEmail: "david.c@startup.io",
-    feeSplit: calculateFeeSplit(8500, 10),
-    createdAt: new Date(Date.now() - 3600 * 1000 * 24).toISOString(),
-  },
-  {
-    id: "tx_4",
-    title: "Next.js Mobile-First Boilerplate Template",
-    amountCents: 2900,
-    currency: "usd",
-    type: "marketplace_purchase",
-    status: "succeeded",
-    creatorId: "user_elena",
-    payerEmail: "dev_jay@tech.net",
-    feeSplit: calculateFeeSplit(2900, 10),
-    createdAt: new Date(Date.now() - 3600 * 1000 * 48).toISOString(),
-  },
-];
 
 /**
  * Fetches all transaction records, merging cloud and offline mock transactions.

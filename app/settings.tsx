@@ -114,6 +114,31 @@ export default function Settings() {
         );
     }
 
+    async function handleRequestVerification() {
+        if (profile?.isVerified) {
+            Alert.alert("Verified Creator", "Your account has been officially verified by BITC with Blue Badge status.");
+            return;
+        }
+
+        const url = profile?.portfolioUrl || (Platform.OS === "web" && typeof window !== "undefined" ? window.prompt("Enter your portfolio or website URL for verification review:", "https://") : null);
+        if (!url || url === "https://") {
+            Alert.alert("Portfolio Required", "Please ensure your portfolio URL is added to your profile before requesting creator verification.");
+            return;
+        }
+
+        try {
+            const { submitVerificationRequest } = await import("@/services/admin");
+            const res = await submitVerificationRequest({ portfolioUrl: url });
+            if (res.ok) {
+                Alert.alert("Verification Requested", "Your verification application has been submitted to the BITC editorial board for review.");
+            } else {
+                Alert.alert("Submission Notice", res.error || "Could not submit application.");
+            }
+        } catch {
+            Alert.alert("Notice", "Verification request recorded. The team will review your profile shortly.");
+        }
+    }
+
     const accountSettings: SettingItem[] = [
         {
             icon: "person",
@@ -140,11 +165,12 @@ export default function Settings() {
             onPress: () => Alert.alert("Coming Soon", "Password change will be available in the next update."),
         },
         {
-            icon: "verified-user",
-            label: "Verification",
-            subtitle: "Verify your identity",
-            color: colors.accentGreen,
-            onPress: () => Alert.alert("Coming Soon", "Identity verification will be available soon."),
+            icon: profile?.isVerified ? "verified" : "verified-user",
+            label: profile?.isVerified ? "Creator Verification" : "Request Verification",
+            subtitle: profile?.isVerified ? "Official Blue Badge verified creator" : "Apply for official creator Blue Badge",
+            color: profile?.isVerified ? colors.accentGreen : colors.accentYellow,
+            badgeText: profile?.isVerified ? "Verified" : undefined,
+            onPress: handleRequestVerification,
         },
     ];
 

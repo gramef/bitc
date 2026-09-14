@@ -49,75 +49,9 @@ export type AdminKPIs = {
   estimatedPlatformGrossVolume: string;
 };
 
-// Seed verification requests for demo & initial deployment
-let verificationQueueState: VerificationRequest[] = [
-  {
-    id: "ver_01",
-    user_id: "usr_201",
-    full_name: "Kofi Mensah",
-    avatar_url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
-    role: "Senior Product Designer",
-    bio: "Ex-Monzo UI designer specializing in fintech systems & micro-interactions. Mentored 40+ junior creatives.",
-    portfolio_url: "https://kofimensah.design",
-    case_studies_count: 5,
-    followers_count: 1420,
-    status: "pending",
-    submitted_at: "2 hours ago",
-  },
-  {
-    id: "ver_02",
-    user_id: "usr_202",
-    full_name: "Zainab Al-Mansoor",
-    avatar_url: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
-    role: "Brand Strategist & Type Director",
-    bio: "Helping heritage and modern consumer brands express unique cultural identities across EMEA.",
-    portfolio_url: "https://behance.net/zainab-design",
-    case_studies_count: 8,
-    followers_count: 3290,
-    status: "pending",
-    submitted_at: "Yesterday",
-  },
-  {
-    id: "ver_03",
-    user_id: "usr_203",
-    full_name: "Liam O'Connor",
-    avatar_url: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
-    role: "Motion Design & 3D Specialist",
-    bio: "Cinema4D and Blender artist creating title sequences and interactive WebGL assets for brands.",
-    portfolio_url: "https://dribbble.com/liamoc",
-    case_studies_count: 6,
-    followers_count: 890,
-    status: "pending",
-    submitted_at: "3 days ago",
-  },
-];
-
-let reportedPostsState: ReportedPost[] = [
-  {
-    id: "rep_01",
-    post_id: "post_910",
-    author_id: "usr_99",
-    author_name: "Spam Bot Account",
-    author_avatar: null,
-    post_text: "MAKE £5000 A DAY CLICK HERE TELEGRAM LINK http://bit.ly/crypto-scam",
-    reason: "Cryptocurrency spam and fraudulent links in Community feed",
-    reported_by: "Sophie Tremblay",
-    reported_at: "15 mins ago",
-    status: "pending",
-  },
-  {
-    id: "rep_02",
-    post_id: "post_911",
-    author_id: "usr_88",
-    author_name: "Unverified Recruiter",
-    author_avatar: null,
-    post_text: "Need 20 Figma screens designed for FREE as a trial test, high potential work next year.",
-    reason: "Exploitative unpaid client brief / violates fair work policy",
-    reported_by: "Amara Okafor",
-    reported_at: "1 hour ago",
-    status: "pending",
-  },
-];
+// Real in-memory fallback queues (empty by default for new environments)
+let verificationQueueState: VerificationRequest[] = [];
+let reportedPostsState: ReportedPost[] = [];
 
 /**
  * Fetch executive dashboard KPIs
@@ -174,7 +108,67 @@ export async function fetchAdminKPIs(): Promise<AdminKPIs> {
 /**
  * Fetch creator verification requests queue
  */
+export async function submitVerificationRequest(params: {
+  portfolioUrl: string;
+  caseStudiesCount?: number;
+  notes?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const sb = getSupabase();
+  if (!sb) return { ok: false, error: "Database not connected" };
+
+  const { data: userRes } = await sb.auth.getUser();
+  if (!userRes?.user?.id) return { ok: false, error: "Must be signed in to request verification" };
+
+  try {
+    const { error } = await sb.from("creator_verifications").insert({
+      user_id: userRes.user.id,
+      portfolio_url: params.portfolioUrl,
+      case_studies_count: params.caseStudiesCount || 0,
+      notes: params.notes || null,
+      status: "pending",
+    });
+
+    if (error) {
+      console.warn("creator_verifications notice:", error.message);
+    }
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || "Failed to submit verification" };
+  }
+}
+
+/**
+ * Fetch creator verification requests queue
+ */
 export async function fetchVerificationRequests(): Promise<VerificationRequest[]> {
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      const { data, error } = await sb
+        .from("creator_verifications")
+        .select(`
+          id, user_id, portfolio_url, case_studies_count, status, submitted_at,
+          profiles:user_id (full_name, avatar_url, role, bio)
+        `)
+        .order("submitted_at", { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        return data.map((d: any) => ({
+          id: d.id,
+          user_id: d.user_id,
+          full_name: d.profiles?.full_name || "Creative",
+          avatar_url: d.profiles?.avatar_url || null,
+          role: d.profiles?.role || "Creative",
+          bio: d.profiles?.bio || "",
+          portfolio_url: d.portfolio_url,
+          case_studies_count: d.case_studies_count || 0,
+          followers_count: 0,
+          status: d.status,
+          submitted_at: d.submitted_at,
+        }));
+      }
+    } catch {}
+  }
   return verificationQueueState;
 }
 
@@ -183,17 +177,25 @@ export async function fetchVerificationRequests(): Promise<VerificationRequest[]
  */
 export async function approveVerification(id: string): Promise<boolean> {
   const req = verificationQueueState.find((r) => r.id === id);
-  if (!req) return false;
-
-  req.status = "approved";
+  if (req) req.status = "approved";
 
   const sb = getSupabase();
   if (sb) {
     try {
-      await sb
-        .from("profiles")
-        .update({ is_verified: true, mentor_approved: true })
-        .eq("id", req.user_id);
+      const { data } = await sb
+        .from("creator_verifications")
+        .update({ status: "approved", reviewed_at: new Date().toISOString() })
+        .eq("id", id)
+        .select("user_id")
+        .maybeSingle();
+
+      const targetUserId = data?.user_id || req?.user_id;
+      if (targetUserId) {
+        await sb
+          .from("profiles")
+          .update({ is_verified: true, mentor_approved: true })
+          .eq("id", targetUserId);
+      }
     } catch {}
   }
 
@@ -205,9 +207,18 @@ export async function approveVerification(id: string): Promise<boolean> {
  */
 export async function rejectVerification(id: string, _reason?: string): Promise<boolean> {
   const req = verificationQueueState.find((r) => r.id === id);
-  if (!req) return false;
+  if (req) req.status = "rejected";
 
-  req.status = "rejected";
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      await sb
+        .from("creator_verifications")
+        .update({ status: "rejected", reviewed_at: new Date().toISOString() })
+        .eq("id", id);
+    } catch {}
+  }
+
   return true;
 }
 
@@ -215,6 +226,34 @@ export async function rejectVerification(id: string, _reason?: string): Promise<
  * Fetch community feed reported posts
  */
 export async function fetchReportedPosts(): Promise<ReportedPost[]> {
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      const { data, error } = await sb
+        .from("reported_content")
+        .select(`
+          id, post_id, reason, reported_by, reported_at, status,
+          posts:post_id (body, author_id, profiles:author_id (full_name, avatar_url))
+        `)
+        .eq("status", "pending")
+        .order("reported_at", { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        return data.map((d: any) => ({
+          id: d.id,
+          post_id: d.post_id,
+          author_id: d.posts?.author_id || "unknown",
+          author_name: d.posts?.profiles?.full_name || "User",
+          author_avatar: d.posts?.profiles?.avatar_url || null,
+          post_text: d.posts?.body || "",
+          reason: d.reason,
+          reported_by: d.reported_by,
+          reported_at: d.reported_at,
+          status: d.status,
+        }));
+      }
+    } catch {}
+  }
   return reportedPostsState.filter((r) => r.status === "pending");
 }
 
@@ -223,17 +262,20 @@ export async function fetchReportedPosts(): Promise<ReportedPost[]> {
  */
 export async function resolveReportedPost(reportId: string, action: "remove" | "dismiss"): Promise<boolean> {
   const item = reportedPostsState.find((r) => r.id === reportId);
-  if (!item) return false;
+  if (item) item.status = action === "remove" ? "resolved" : "dismissed";
 
-  item.status = action === "remove" ? "resolved" : "dismissed";
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      await sb
+        .from("reported_content")
+        .update({ status: action === "remove" ? "resolved" : "dismissed" })
+        .eq("id", reportId);
 
-  if (action === "remove") {
-    const sb = getSupabase();
-    if (sb) {
-      try {
+      if (action === "remove" && item?.post_id) {
         await sb.from("posts").delete().eq("id", item.post_id);
-      } catch {}
-    }
+      }
+    } catch {}
   }
 
   return true;

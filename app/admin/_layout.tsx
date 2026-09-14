@@ -24,7 +24,7 @@ type AdminNavItem = {
 const NAV_ITEMS: AdminNavItem[] = [
   { label: "Overview", route: "/admin", icon: "dashboard" },
   { label: "Events & Roster", route: "/admin/events", icon: "confirmation-number" },
-  { label: "Verifications", route: "/admin/verifications", icon: "verified", badge: "3" },
+  { label: "Verifications", route: "/admin/verifications", icon: "verified" },
   { label: "Moderation", route: "/admin/moderation", icon: "security", badge: "Live" },
   { label: "Jobs & Market", route: "/admin/jobs", icon: "work" },
 ];

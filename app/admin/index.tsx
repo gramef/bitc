@@ -1,4 +1,4 @@
-import { AdminKPIs, fetchAdminKPIs } from "@/services/admin";
+import { AdminKPIs, fetchAdminKPIs, fetchVerificationRequests } from "@/services/admin";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
@@ -19,12 +19,16 @@ export default function AdminOverview() {
   const isDesktop = width >= 840;
 
   const [kpis, setKpis] = useState<AdminKPIs | null>(null);
+  const [pendingVerifications, setPendingVerifications] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchAdminKPIs().then((data) => {
       setKpis(data);
       setLoading(false);
+    });
+    fetchVerificationRequests().then((reqs) => {
+      setPendingVerifications(reqs.filter((r) => r.status === "pending").length);
     });
   }, []);
 
@@ -147,9 +151,11 @@ export default function AdminOverview() {
             <View style={[styles.actionIcon, { backgroundColor: colors.accentGreen }]}>
               <MaterialIcons name="verified" size={22} color={colors.textDark} />
             </View>
-            <View style={styles.pendingBadge}>
-              <Text style={styles.pendingBadgeText}>3 Pending</Text>
-            </View>
+            {pendingVerifications > 0 && (
+              <View style={styles.pendingBadge}>
+                <Text style={styles.pendingBadgeText}>{pendingVerifications} Pending</Text>
+              </View>
+            )}
           </View>
           <Text style={styles.actionTitle}>Creator Verification Queue</Text>
           <Text style={styles.actionDesc}>
