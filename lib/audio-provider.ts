@@ -7,6 +7,7 @@ import {
   Track,
   type TrackPublication,
 } from "livekit-client";
+import { Platform } from "react-native";
 
 /* ────────────────── Types ────────────────── */
 
@@ -24,6 +25,7 @@ export type RoomCallbacks = {
   onSpeakingChanged?: (identity: string, speaking: boolean) => void;
   onMuteChanged?: (identity: string, muted: boolean) => void;
   onConnectionStateChanged?: (state: ConnectionState) => void;
+  onAudioPlaybackChanged?: (canPlayback: boolean) => void;
   onDisconnected?: () => void;
 };
 
@@ -144,12 +146,22 @@ export async function connectToRoom(
   roomName: string,
   identity: string,
   displayName: string,
-  canPublish: boolean,
+  canPublish: boolean = true,
   callbacks?: RoomCallbacks
 ): Promise<boolean> {
   if (!LIVEKIT_URL) {
     console.warn("LiveKit URL not configured — skipping audio connection");
     return false;
+  }
+
+  // Register native globals for iOS / Android if running native
+  if (Platform.OS !== "web") {
+    try {
+      const { registerGlobals } = require("@livekit/react-native");
+      registerGlobals();
+    } catch {
+      // Native globals registration optional if already set up
+    }
   }
 
   try {
@@ -170,7 +182,42 @@ export async function connectToRoom(
       dynacast: true,
     });
 
-    // Event listeners
+    // Handle remote track subscription and audio output element binding
+    room.on(RoomEvent.TrackSubscribed, (track: Track, _pub: TrackPublication, _participant: Participant) => {
+      if (track.kind === Track.Kind.Audio) {
+        try {
+          if (Platform.OS === "web" || typeof document !== "undefined") {
+            const el = track.attach();
+            if (el && typeof el.play === "function") {
+              el.play().catch((playErr) => {
+                console.warn("LiveKit audio autoplay blocked by browser policy:", playErr);
+              });
+            }
+          }
+        } catch (attachErr) {
+          console.warn("LiveKit track attach warning:", attachErr);
+        }
+      }
+    });
+
+    room.on(RoomEvent.TrackUnsubscribed, (track: Track) => {
+      if (track.kind === Track.Kind.Audio) {
+        try {
+          if (Platform.OS === "web" || typeof document !== "undefined") {
+            track.detach();
+          }
+        } catch (detachErr) {
+          console.warn("LiveKit track detach warning:", detachErr);
+        }
+      }
+    });
+
+    // Browser audio playback autoplay status
+    room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
+      callbacks?.onAudioPlaybackChanged?.(room.canPlaybackAudio);
+    });
+
+    // Participant lifecycle listeners
     room.on(RoomEvent.ParticipantConnected, (participant: Participant) => {
       callbacks?.onParticipantJoined?.(getParticipantInfo(participant));
       setupParticipantListeners(participant, callbacks);
@@ -203,10 +250,17 @@ export async function connectToRoom(
       _room = null;
     });
 
-    // Connect
+    // Connect to LiveKit server
     await room.connect(LIVEKIT_URL, token);
 
-    // Enable microphone safely
+    // Start audio playback for browser autoplay policies
+    try {
+      await room.startAudio();
+    } catch (audioErr) {
+      console.warn("LiveKit startAudio notice:", audioErr);
+    }
+
+    // Enable microphone safely if authorized to publish
     if (canPublish) {
       try {
         await room.localParticipant.setMicrophoneEnabled(true);
@@ -215,9 +269,19 @@ export async function connectToRoom(
       }
     }
 
-    // Set up listeners for existing participants
+    // Set up listeners and attach any existing audio tracks from remote participants
     for (const p of room.remoteParticipants.values()) {
       setupParticipantListeners(p, callbacks);
+      for (const pub of p.audioTrackPublications.values()) {
+        if (pub.track && (Platform.OS === "web" || typeof document !== "undefined")) {
+          try {
+            const el = pub.track.attach();
+            if (el && typeof el.play === "function") {
+              el.play().catch(() => {});
+            }
+          } catch {}
+        }
+      }
     }
 
     _room = room;
@@ -254,6 +318,20 @@ export async function setMicrophoneEnabled(enabled: boolean): Promise<void> {
   } catch (err) {
     console.warn("setMicrophoneEnabled warning:", err);
   }
+}
+
+export async function resumeAudioPlayback(): Promise<boolean> {
+  if (!_room) return false;
+  try {
+    await _room.startAudio();
+    return _room.canPlaybackAudio;
+  } catch {
+    return false;
+  }
+}
+
+export function canPlaybackAudio(): boolean {
+  return _room ? _room.canPlaybackAudio : true;
 }
 
 export function getLocalParticipant(): AudioParticipant | null {

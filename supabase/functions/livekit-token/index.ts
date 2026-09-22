@@ -88,7 +88,7 @@ serve(async (req: Request) => {
       );
     }
 
-    const { roomName, identity, name, canPublish = false } = await req.json();
+    const { roomName, identity, name, canPublish = true } = await req.json();
 
     if (!roomName || !identity) {
       return new Response(

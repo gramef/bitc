@@ -1,7 +1,14 @@
 import SafeScreen from "@/components/SafeScreen";
 import * as Clipboard from "expo-clipboard";
 import { useAuth } from "@/contexts/AuthContext";
-import { connectToRoom as connectAudio, disconnectFromRoom as disconnectAudio, setMicrophoneEnabled, isConnected as isAudioConnected } from "@/lib/audio-provider";
+import {
+  connectToRoom as connectAudio,
+  disconnectFromRoom as disconnectAudio,
+  setMicrophoneEnabled,
+  isConnected as isAudioConnected,
+  resumeAudioPlayback,
+  canPlaybackAudio,
+} from "@/lib/audio-provider";
 import {
   demoteToListener,
   endRoom,
@@ -45,6 +52,7 @@ export default function RoomScreen() {
   const [participants, setParticipants] = useState<ParticipantWithProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [audioConnected, setAudioConnected] = useState(false);
+  const [canPlayback, setCanPlayback] = useState(true);
   const [speakingUsers, setSpeakingUsers] = useState<Set<string>>(new Set());
   const [showEndModal, setShowEndModal] = useState(false);
   const [isSpeakerOutput, setIsSpeakerOutput] = useState(true);
@@ -79,13 +87,11 @@ export default function RoomScreen() {
       await joinRoom(id);
       await loadRoom();
 
-      const roomData = await fetchRoomById(id);
-      const iAmHost = roomData?.host_id === user.id;
       const connected = await connectAudio(
         id,
         user.id,
         user.user_metadata?.full_name ?? "Guest",
-        iAmHost,
+        true, // Allow all community room participants to speak when unmuted
         {
           onSpeakingChanged: (identity, speaking) => {
             setSpeakingUsers((prev) => {
@@ -100,6 +106,10 @@ export default function RoomScreen() {
           },
           onConnectionStateChanged: () => {
             setAudioConnected(isAudioConnected());
+            setCanPlayback(canPlaybackAudio());
+          },
+          onAudioPlaybackChanged: (allowed) => {
+            setCanPlayback(allowed);
           },
           onDisconnected: () => {
             setAudioConnected(false);
@@ -107,6 +117,7 @@ export default function RoomScreen() {
         }
       );
       setAudioConnected(connected);
+      setCanPlayback(canPlaybackAudio());
     })();
 
     const channel = subscribeToRoomParticipants(id, () => loadRoom());
@@ -146,6 +157,8 @@ export default function RoomScreen() {
     if (audioConnected) {
       await setMicrophoneEnabled(nextMic);
     }
+    await resumeAudioPlayback();
+    setCanPlayback(canPlaybackAudio());
   }
 
   async function handleRaiseHand() {
@@ -299,6 +312,22 @@ export default function RoomScreen() {
             </Pressable>
           </View>
         </View>
+
+        {/* Browser Autoplay Unlock Notice */}
+        {!canPlayback && (
+          <Pressable
+            style={styles.playbackBanner}
+            onPress={async () => {
+              const ok = await resumeAudioPlayback();
+              setCanPlayback(ok);
+            }}
+          >
+            <MaterialIcons name="volume-up" size={16} color="#0b0b0b" />
+            <Text style={styles.playbackBannerText}>
+              Browser paused audio • Tap to enable sound 🔊
+            </Text>
+          </Pressable>
+        )}
 
         {/* 3-Column Participant Grid */}
         <ScrollView contentContainerStyle={styles.gridContent} showsVerticalScrollIndicator={false}>
@@ -470,6 +499,20 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
+  },
+  playbackBanner: {
+    backgroundColor: colors.accentYellow,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.md,
+  },
+  playbackBannerText: {
+    color: "#0b0b0b",
+    fontFamily: fonts.bold,
+    fontSize: 12,
   },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flex: 1 },
   greenIconCircle: {
