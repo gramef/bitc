@@ -56,7 +56,7 @@ export default function SkillsDashboard() {
     <SafeScreen>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.topRow}>
-          <Pressable style={styles.topLeft} onPress={() => router.push("/profile")}>
+          <Pressable style={styles.topLeft} onPress={() => router.push("/(tabs)/profile" as any)}>
             <Avatar
               uri={profile?.avatarUrl}
               name={profile?.fullName}

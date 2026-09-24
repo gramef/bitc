@@ -115,7 +115,7 @@ export default function Home() {
       >
         {/* ── Header ── */}
         <View style={styles.topRow}>
-          <Pressable style={styles.topLeft} onPress={() => router.push("/profile")}>
+          <Pressable style={styles.topLeft} onPress={() => router.push("/(tabs)/profile" as any)}>
             <Avatar
               uri={profile?.avatarUrl}
               name={profile?.fullName}
@@ -256,7 +256,7 @@ export default function Home() {
                 <View style={styles.personaBtnRow}>
                   <Pressable
                     style={[styles.personaPrimaryBtn, { backgroundColor: "#00B894" }]}
-                    onPress={() => router.push("/profile" as any)}
+                    onPress={() => router.push("/(tabs)/profile" as any)}
                   >
                     <MaterialIcons name="add" size={16} color="#141414" />
                     <Text style={[styles.personaPrimaryBtnText, { color: "#141414" }]}>+ Add Project</Text>

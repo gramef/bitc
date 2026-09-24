@@ -121,7 +121,7 @@ export default function AdminLayout() {
 
               <Pressable
                 style={styles.exitBtn}
-                onPress={() => router.push("/home")}
+                onPress={() => router.push("/(tabs)/home" as any)}
                 hitSlop={6}
               >
                 <MaterialIcons name="arrow-back" size={16} color={colors.textSecondary} />
@@ -163,7 +163,7 @@ export default function AdminLayout() {
         // Mobile / Tablet Layout: Top Header + Scrollable Tabs + Content
         <View style={styles.mobileLayout}>
           <View style={styles.mobileTopBar}>
-            <Pressable onPress={() => router.push("/home")} hitSlop={8} style={styles.mobileBackBtn}>
+            <Pressable onPress={() => router.push("/(tabs)/home" as any)} hitSlop={8} style={styles.mobileBackBtn}>
               <MaterialIcons name="arrow-back" size={20} color={colors.textPrimary} />
             </Pressable>
             <View style={{ flex: 1, marginLeft: spacing.sm }}>

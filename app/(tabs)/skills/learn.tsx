@@ -45,7 +45,7 @@ export default function SkillsLearn() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Top Header */}
         <View style={styles.topRow}>
-          <Pressable style={styles.topLeft} onPress={() => router.push("/profile")}>
+          <Pressable style={styles.topLeft} onPress={() => router.push("/(tabs)/profile" as any)}>
             <Avatar
               uri={profile?.avatarUrl}
               name={profile?.fullName}
