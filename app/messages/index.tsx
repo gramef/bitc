@@ -1,13 +1,17 @@
 import SafeScreen from "@/components/SafeScreen";
 import { Avatar } from "@/components/ui/Avatar";
-import { Conversation, fetchConversations } from "@/services/messages";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  Conversation,
+  fetchConversations,
+  subscribeToInbox,
+} from "@/services/messages";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,18 +22,34 @@ import {
 
 export default function MessagesInbox() {
   const router = useRouter();
+  const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
+  const loadConversations = useCallback(() => {
+    fetchConversations().then((data) => {
+      setConversations(data);
+      setLoading(false);
+    });
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
-      fetchConversations().then((data) => {
-        setConversations(data);
-        setLoading(false);
-      });
-    }, [])
+      loadConversations();
+    }, [loadConversations])
   );
+
+  // Subscribe to live incoming messages over Supabase Realtime
+  useEffect(() => {
+    if (!user?.id) return;
+    const unsubscribe = subscribeToInbox(user.id, () => {
+      loadConversations();
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [user?.id, loadConversations]);
 
   const filtered = conversations.filter(
     (c) =>
@@ -185,7 +205,6 @@ const styles = StyleSheet.create({
     borderColor: colors.outline,
     padding: spacing.md,
   },
-  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: "#1e1e1e" },
   convNameRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   name: { color: colors.textPrimary, fontFamily: fonts.bold, fontSize: fonts.size.md },
   timeText: { color: colors.textMuted, fontFamily: fonts.regular, fontSize: 11 },

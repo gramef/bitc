@@ -1,10 +1,12 @@
 import SafeScreen from "@/components/SafeScreen";
 import { Avatar } from "@/components/ui/Avatar";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Conversation,
   DirectMessage,
   fetchConversationDetails,
   sendDirectMessage,
+  subscribeToConversationThread,
 } from "@/services/messages";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -13,7 +15,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -26,6 +27,8 @@ import {
 export default function ChatThread() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuth();
+  const currentUserId = user?.id || "me";
 
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<DirectMessage[]>([]);
@@ -52,6 +55,24 @@ export default function ChatThread() {
     loadThread();
   }, [loadThread]);
 
+  // Subscribe to live incoming messages over Supabase Realtime
+  useEffect(() => {
+    if (!id) return;
+    const unsubscribe = subscribeToConversationThread(currentUserId, id, (incomingMsg) => {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === incomingMsg.id)) return prev;
+        return [...prev, incomingMsg];
+      });
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [currentUserId, id]);
+
   async function handleSend() {
     if (!input.trim() || !id || sending) return;
     const textToSend = input.trim();
@@ -69,6 +90,9 @@ export default function ChatThread() {
       });
 
       setMessages((prev) => [...prev, sent]);
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
     } catch {
       console.warn("Failed to send message");
     } finally {
@@ -132,7 +156,9 @@ export default function ChatThread() {
           showsVerticalScrollIndicator={false}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
           renderItem={({ item }) => {
-            const isMe = item.sender_id === "me";
+            const isMe =
+              item.sender_id === "me" ||
+              (currentUserId !== "me" && item.sender_id === currentUserId);
             return (
               <View
                 style={[
@@ -203,7 +229,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.outline,
   },
-  avatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: "#1e1e1e" },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   name: { color: colors.textPrimary, fontFamily: fonts.bold, fontSize: fonts.size.sm },
   roleText: { color: colors.textSecondary, fontFamily: fonts.regular, fontSize: fonts.size.xs },
