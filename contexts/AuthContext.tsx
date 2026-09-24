@@ -84,33 +84,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .select("id, full_name, avatar_url, bio, role, is_mentor, mentor_approved, is_verified, portfolio_url")
       .eq("id", userId)
       .maybeSingle();
+
+    const userRes = await sb.auth.getUser().catch(() => null);
+    const authUser = userRes?.data?.user;
+
     // Check user_metadata and AsyncStorage cache for cover_url
     let coverUrl: string | null = (data as any)?.cover_url ?? null;
     if (!coverUrl) {
-      const userRes = await sb.auth.getUser().catch(() => null);
-      coverUrl = userRes?.data?.user?.user_metadata?.cover_url ?? null;
+      coverUrl = authUser?.user_metadata?.cover_url ?? null;
     }
     if (!coverUrl) {
       const cached = await AsyncStorage.getItem(`@bitc_cover_${userId}`).catch(() => null);
       if (cached) coverUrl = cached;
     }
 
-    if (data) {
-      const p: Profile = {
-        id: data.id,
-        fullName: data.full_name ?? "Guest",
-        avatarUrl: data.avatar_url ?? null,
-        coverUrl: coverUrl ?? null,
-        bio: data.bio ?? null,
-        role: (data.role as UserRole) ?? "user",
-        isMentor: data.is_mentor ?? false,
-        mentorApproved: data.mentor_approved ?? false,
-        isVerified: (data as any).is_verified ?? false,
-        portfolioUrl: (data as any).portfolio_url ?? null,
-      };
-      setProfile(p);
-      AsyncStorage.setItem(CACHED_PROFILE_KEY, JSON.stringify(p)).catch(() => {});
+    // Resolve robust authentic full name
+    const metaFullName = authUser?.user_metadata?.full_name || authUser?.user_metadata?.name || null;
+    const emailPrefix = authUser?.email ? authUser.email.split("@")[0] : null;
+    const cleanEmailPrefix = emailPrefix ? emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1) : null;
+
+    const resolvedFullName =
+      (data?.full_name && data.full_name.trim() !== "Guest" ? data.full_name.trim() : null) ||
+      (metaFullName && metaFullName.trim() !== "Guest" ? metaFullName.trim() : null) ||
+      cleanEmailPrefix ||
+      "Creator";
+
+    // If profile had no full_name or had "Guest", but we resolved a legitimate name, sync it back to profiles table
+    if (resolvedFullName !== "Guest" && (!data?.full_name || data.full_name === "Guest")) {
+      sb.from("profiles")
+        .upsert({ id: userId, full_name: resolvedFullName }, { onConflict: "id" })
+        .then(() => {});
     }
+
+    const p: Profile = {
+      id: userId,
+      fullName: resolvedFullName,
+      avatarUrl: data?.avatar_url ?? authUser?.user_metadata?.avatar_url ?? null,
+      coverUrl: coverUrl ?? null,
+      bio: data?.bio ?? null,
+      role: (data?.role as UserRole) ?? (authUser?.user_metadata?.role as UserRole) ?? "creative",
+      isMentor: data?.is_mentor ?? false,
+      mentorApproved: data?.mentor_approved ?? false,
+      isVerified: (data as any)?.is_verified ?? false,
+      portfolioUrl: (data as any)?.portfolio_url ?? null,
+    };
+    setProfile(p);
+    AsyncStorage.setItem(CACHED_PROFILE_KEY, JSON.stringify(p)).catch(() => {});
   }, []);
 
   /* ---------- Listen for auth changes ---------- */

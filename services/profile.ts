@@ -41,7 +41,7 @@ export type MyReview = {
 export async function fetchMyProfile(): Promise<ProfileInfo> {
   const sb = getSupabase();
   const fallback: ProfileInfo = {
-    fullName: "Guest",
+    fullName: "Creator",
     avatarUrl: null,
     bio: null,
     projectsCount: 0,
@@ -52,12 +52,17 @@ export async function fetchMyProfile(): Promise<ProfileInfo> {
   const { data: userRes, error: userErr } = await sb.auth.getUser();
   if (userErr || !userRes?.user?.id) return fallback;
   const userId = userRes.user.id;
+
+  const metaName = userRes.user.user_metadata?.full_name || userRes.user.user_metadata?.name;
+  const emailPrefix = userRes.user.email ? userRes.user.email.split("@")[0] : null;
+  const derivedName = metaName || (emailPrefix ? emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1) : "Creator");
+
   const { data, error } = await sb
     .from("profiles")
     .select("full_name, avatar_url, bio, projects_count, followers_count, rating, is_verified")
     .eq("id", userId)
     .single();
-  if (error || !data) return fallback;
+
   let coverUrl: string | null = (data as any)?.cover_url ?? null;
   if (!coverUrl && userRes.user.user_metadata?.cover_url) {
     coverUrl = userRes.user.user_metadata.cover_url;
@@ -67,15 +72,17 @@ export async function fetchMyProfile(): Promise<ProfileInfo> {
     if (cached) coverUrl = cached;
   }
 
+  const resolvedName = (data?.full_name && data.full_name.trim() !== "Guest" ? data.full_name.trim() : null) || derivedName;
+
   return {
-    fullName: data.full_name ?? "Guest",
-    avatarUrl: data.avatar_url ?? null,
+    fullName: resolvedName,
+    avatarUrl: data?.avatar_url ?? userRes.user.user_metadata?.avatar_url ?? null,
     coverUrl: coverUrl ?? null,
-    bio: data.bio ?? null,
-    projectsCount: Number(data.projects_count ?? 0),
-    followersCount: Number(data.followers_count ?? 0),
-    rating: Number(data.rating ?? 0),
-    isVerified: Boolean((data as any).is_verified ?? false),
+    bio: data?.bio ?? null,
+    projectsCount: Number(data?.projects_count ?? 0),
+    followersCount: Number(data?.followers_count ?? 0),
+    rating: Number(data?.rating ?? 0),
+    isVerified: Boolean((data as any)?.is_verified ?? false),
   };
 }
 

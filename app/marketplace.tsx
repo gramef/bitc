@@ -1,6 +1,11 @@
 import SafeScreen from "@/components/SafeScreen";
 import { Chip, EmptyState, SearchBar } from "@/components/ui";
-import { claimMarketplaceProduct, fetchMarketplaceProducts, type Product } from "@/services/marketplace";
+import {
+    claimMarketplaceProduct,
+    fetchMarketplaceProducts,
+    fetchMyClaimedProducts,
+    type Product,
+} from "@/services/marketplace";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
@@ -33,6 +38,10 @@ export default function Marketplace() {
     const [claimSuccess, setClaimSuccess] = useState(false);
 
     useEffect(() => {
+        fetchMyClaimedProducts().then(setClaimedIds);
+    }, []);
+
+    useEffect(() => {
         let active = true;
         fetchMarketplaceProducts(search).then((data) => {
             if (active) {
@@ -60,7 +69,7 @@ export default function Marketplace() {
         if (!selectedProduct) return;
         setClaiming(true);
 
-        const res = await claimMarketplaceProduct(selectedProduct.id);
+        const res = await claimMarketplaceProduct(selectedProduct.id, selectedProduct.title);
         setClaiming(false);
 
         if (res.ok) {
@@ -165,12 +174,12 @@ export default function Marketplace() {
                                             <Text style={styles.specVal}>{selectedProduct.category}</Text>
                                         </View>
                                         <View style={styles.specBox}>
-                                            <Text style={styles.specLabel}>Format</Text>
-                                            <Text style={styles.specVal}>ZIP / Digital File</Text>
+                                            <Text style={styles.specLabel}>Format & Size</Text>
+                                            <Text style={styles.specVal}>{selectedProduct.fileFormat || "Digital File"}{selectedProduct.fileSize ? ` (${selectedProduct.fileSize})` : ""}</Text>
                                         </View>
                                         <View style={styles.specBox}>
                                             <Text style={styles.specLabel}>License</Text>
-                                            <Text style={styles.specVal}>Personal & Commercial</Text>
+                                            <Text style={styles.specVal}>{selectedProduct.license || "Personal & Commercial"}</Text>
                                         </View>
                                         <View style={styles.specBox}>
                                             <Text style={styles.specLabel}>Price</Text>

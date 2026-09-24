@@ -99,7 +99,8 @@ export default function Mentorship() {
             datePart,
             timePart,
             selectedTopic,
-            bookingNote
+            bookingNote,
+            selectedMentor.name
         );
 
         setBookingLoading(false);

@@ -174,3 +174,53 @@ export async function sendApplicationStatusNotification(jobTitle: string, status
     { type: "job_application", status }
   );
 }
+
+/**
+ * Get count of unread notifications for the user
+ */
+export async function getUnreadNotificationCount(): Promise<number> {
+  const sb = getSupabase();
+  if (!sb) return 0;
+
+  try {
+    const { data: userRes } = await sb.auth.getUser();
+    const userId = userRes?.user?.id;
+
+    let query = sb
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("unread", true);
+
+    if (userId) {
+      query = query.or(`user_id.eq.${userId},user_id.is.null`);
+    } else {
+      query = query.is("user_id", null);
+    }
+
+    const { count, error } = await query;
+    if (error || typeof count !== "number") return 0;
+    return count;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Mark all notifications as read for current user
+ */
+export async function markAllNotificationsAsRead(): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) return;
+
+  try {
+    const { data: userRes } = await sb.auth.getUser();
+    const userId = userRes?.user?.id;
+    if (!userId) return;
+
+    await sb
+      .from("notifications")
+      .update({ unread: false })
+      .eq("user_id", userId);
+  } catch {}
+}
+

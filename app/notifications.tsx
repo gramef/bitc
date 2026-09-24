@@ -1,6 +1,6 @@
 import SafeScreen from "@/components/SafeScreen";
 import { EmptyState } from "@/components/ui";
-import { fetchNotifications } from "@/services/notifications";
+import { fetchNotifications, markAllNotificationsAsRead } from "@/services/notifications";
 import { colors, fonts, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
@@ -48,6 +48,7 @@ export default function Notifications() {
 
   function markAllRead() {
     setList((prev) => prev.map((n) => ({ ...n, unread: false })));
+    markAllNotificationsAsRead().catch(() => {});
   }
 
   return (

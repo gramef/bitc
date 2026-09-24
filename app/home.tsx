@@ -3,6 +3,7 @@ import { Avatar, EmptyState, SearchBar } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { EventRow, fetchEvents } from "@/services/events";
 import { fetchJobs, JobRow } from "@/services/jobs";
+import { getUnreadNotificationCount } from "@/services/notifications";
 import { getRoleBadge } from "@/services/permissions";
 import { colors, fonts, radii, spacing } from "@/theme/tokens";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -33,15 +34,24 @@ function getGreeting(): string {
 export default function Home() {
   const router = useRouter();
 
-  const { profile, refreshProfile } = useAuth();
+  const { profile, user, refreshProfile } = useAuth();
   const role = profile?.role ?? "creative";
   const badge = getRoleBadge(role);
-  const profileName = profile?.fullName ?? "Guest";
-  const firstName = profileName.split(" ")[0];
+  const rawName =
+    (profile?.fullName && profile.fullName !== "Guest" ? profile.fullName : null) ||
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    (user?.email ? user.email.split("@")[0] : null) ||
+    "Creator";
+  const cleanFirst = rawName.split(" ")[0].replace(/[^a-zA-Z0-9_-]/g, "");
+  const firstName = cleanFirst ? cleanFirst.charAt(0).toUpperCase() + cleanFirst.slice(1) : "Creator";
+
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
       refreshProfile();
+      getUnreadNotificationCount().then(setUnreadCount);
     }, [refreshProfile])
   );
 
@@ -51,9 +61,14 @@ export default function Home() {
   const [search, setSearch] = useState("");
 
   const loadData = useCallback(async () => {
-    const [e, j] = await Promise.all([fetchEvents(5), fetchJobs(5)]);
+    const [e, j, unread] = await Promise.all([
+      fetchEvents(5),
+      fetchJobs(5),
+      getUnreadNotificationCount(),
+    ]);
     setEvents(e);
     setJobs(j);
+    setUnreadCount(unread);
   }, []);
 
   useEffect(() => {
@@ -147,7 +162,7 @@ export default function Home() {
               onPress={() => router.push("/notifications")}
             >
               <MaterialIcons name="notifications-none" size={22} color={colors.textPrimary} />
-              <View style={styles.badge} />
+              {unreadCount > 0 && <View style={styles.badge} />}
             </Pressable>
           </View>
         </View>
@@ -298,7 +313,11 @@ export default function Home() {
             contentContainerStyle={styles.carouselContent}
           >
             {events.map((ev) => (
-              <View key={ev.id} style={styles.eventCard}>
+              <Pressable
+                key={ev.id}
+                style={styles.eventCard}
+                onPress={() => router.push(`/event-detail?id=${ev.id}` as any)}
+              >
                 <View style={styles.eventImageWrap}>
                   {ev.image_url ? (
                     <Image source={{ uri: ev.image_url }} style={styles.eventImage} contentFit="cover" />
@@ -321,7 +340,7 @@ export default function Home() {
                     <Text style={styles.eventMeta} numberOfLines={1}>{ev.city ?? "Online"}</Text>
                   </View>
                 </View>
-              </View>
+              </Pressable>
             ))}
           </ScrollView>
         )}
@@ -338,7 +357,11 @@ export default function Home() {
           <EmptyState icon="work" title="No jobs posted yet" subtitle="New opportunities are added daily" />
         ) : (
           jobs.slice(0, 4).map((job, i) => (
-            <Pressable key={job.id} style={styles.jobCard}>
+            <Pressable
+              key={job.id}
+              style={styles.jobCard}
+              onPress={() => router.push(`/job-detail?id=${job.id}` as any)}
+            >
               <View style={styles.jobLeft}>
                 {job.image_url ? (
                   <Image source={{ uri: job.image_url }} style={styles.jobLogo} contentFit="cover" />

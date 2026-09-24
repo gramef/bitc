@@ -76,7 +76,11 @@ export default function ProfileSetup() {
       return;
     }
     if (profile) {
-      if (profile.fullName !== "Guest") setFullName(profile.fullName);
+      if (profile.fullName && profile.fullName !== "Guest") {
+        setFullName(profile.fullName);
+      } else if (user?.user_metadata?.full_name || user?.user_metadata?.name) {
+        setFullName(user.user_metadata.full_name || user.user_metadata.name);
+      }
       setBio(profile.bio ?? "");
       if (profile.avatarUrl) {
         setExistingAvatarUrl(profile.avatarUrl);
